@@ -1,4 +1,5 @@
 import VsaIris.Interp.Case.AssignT
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -15,7 +16,7 @@ open Vsa.MemRepr Vsa.Sim
     (h8 : R 8 = aX) (h18 : R 18 = inp) (h2 : R 2 = s + 18446744073709550528#64) :
     IW live m (leafView aX.toNat 16)
     (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) Q 0x800034b8#64 R Mt
-  by ix_run hlive using [h8, h18, h2, hsf] at 0x800034e4
+  by sym_run hlive using [h8, h18, h2, hsf] at 0x800034e4
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
@@ -101,8 +102,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
 
   ihave Hc := evalSpecsP_at (evalCore N L Room inp) st d env e $$ IH
   iapply ms_callEvalP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003488)
-    (jalx_80003488 live (fun p hp => hlive _ (interp_code_80003488 p hp)))
-    interp_code_80003488 (by decide) (Core := evalCore N L Room inp) (st := st) (d := d) (env := env)
+    ((step% jalx 0x80003488) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (Core := evalCore N L Room inp) (st := st) (d := d) (env := env)
     (e := e) (slot := s + 18446744073709550528#64 + 240#64) (aC := BitVec.ofNat 64 qc) (aE := aE)
     (s0 := s) (sret0 := sret) (m := evalNeed (.assign x e) d - 1088)
     (n0 := evalNeed (.assign x e) d) (Out := slot24 sret.toNat)
@@ -193,8 +194,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     %(getSaved.map fun j => (j, R2 j)) %(by simp [getSaved])
   ihave #Hx := strAt_of_cstringWithin hfs.str (sharedWin_of_readOK hgeo) $$ Hro
   iapply ms_callEnv3 (wpW _) (i := 0x800034b0) (entry := envSetPC) (R := R2)
-    (jalx_800034b0 live (fun p hp => hlive _ (interp_code_800034b0 p hp)))
-    interp_code_800034b0 (by decide)
+    ((step% jalx 0x800034b0) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide)
     (φ := EnvSp (R2 2) envGetNeed ∧ SlotWin (R2 12).toNat)
     ⟨⟨(by rw [e2, hsf]; unfold htifLo envGetNeed; unfold Vsa.Sim.tohostAddr at *; omega),
        (by rw [e2, hsf]; omega), (by rw [e2, hsf]; omega)⟩,
@@ -253,7 +254,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
       · ipureintro; exact hB
       · iexact Hbw
     intro F'
-    refine it_800034b4 hlive (fun hc => absurd (by
+    refine (step% it 0x800034b4) hlive (fun hc => absurd (by
       simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hres) hc) (fun hz => ?_)
     refine AssignP_run4 (aX := aX) (s := s) (sret := sret) (inp := BitVec.ofNat 64 inp) hlive hsf
       hs' hs2 hs3 hx1 hx2 hx3 ?_ ?_ ?_ ?_
@@ -268,7 +269,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     unfold F'
     iintro ⟨⟨#HE, #Hcode, #Hx, Hst, Hw, Hk⟩, Hms⟩
     iapply ev_rtErr (wpW _) (N := N) (L := L) (Room := Room) (inp := inp) HN hcl
-      (jalx_800034e4 live (fun p hp => hlive _ (interp_code_800034e4 p hp))) interp_code_800034e4
+      ((step% jalx 0x800034e4) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
       (sret := sret) (s := s) (n := evalNeed (.assign x e) d) (p := q) (x := x)
       (fun hro hs => assignFmt_ok hro hs 0#64) hfs.lt hsg
       (by have := hroom.room; unfold evalFrame at this; omega) hdj
@@ -304,7 +305,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     · iexact Hbw
   intro F'
 
-  refine it_800034b4 hlive (fun hnz => ?_) (fun hc => absurd (by
+  refine (step% it 0x800034b4) hlive (fun hnz => ?_) (fun hc => absurd (by
     simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [hres]; decide) hc)
   refine AssignT_run3 (aX := aX) (s := s) (sret := sret) (ret := ret) (v8 := rv 8) (v9 := rv 9)
     (v18 := rv 18) (w0 := w0) (w1 := w1) (w2 := w2) hlive hsf hs' hs2 hs3 hal hq1 hq2 hq3

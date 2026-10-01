@@ -1,25 +1,11 @@
-import Vsa.Sim.DecodeTable.Batch03Part15
-import Vsa.Sim.DecodeTable.Batch03Part16
-import Vsa.Sim.DecodeTable.Batch03Part31
-import Vsa.Sim.DecodeTable.Batch04Part09
-import Vsa.Sim.DecodeTable.Batch07Part23
-import Vsa.Sim.DecodeTable.Batch08Part13
-import Vsa.Sim.DecodeTable.Batch08Part14
-import Vsa.Sim.DecodeTable.Batch08Part19
-import Vsa.Sim.DecodeTable.Batch09Part18
-import Vsa.Sim.DecodeTable.Batch11Part23
-import Vsa.Sim.DecodeTable.Batch16Part21
+import Vsa.Sim.DecodeNF
 import Vsa.Sim.MemcpySites2
-import Vsa.Sim.DecodeTable.Batch03Part21
-import Vsa.Sim.DecodeTable.Batch03Part23
-import Vsa.Sim.DecodeTable.Batch04Part11
-import Vsa.Sim.DecodeTable.Batch16Part27
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState)
-open Vsa.Sim.Code (MemcpyLoaded memcpy_at_80006bc8 memcpy_at_80006bcc memcpy_at_80006bd0 memcpy_at_80006bd4 memcpy_at_80006bd8 memcpy_at_80006bdc memcpy_at_80006be0 memcpy_at_80006be4 memcpy_at_80006be8 memcpy_at_80006bec memcpy_at_80006bf0 memcpy_at_80006bf4 memcpy_at_80006bf8 memcpy_at_80006c3c)
+open Vsa.Sim.Code (MemcpyLoaded)
 
 set_option maxHeartbeats 8000000
 set_option maxRecDepth 1000000
@@ -55,13 +41,13 @@ theorem site_80006bd8
         (sigmaPost_alu σ pc vminstret Register.x12
           (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v12 (sign_extend (m := 64) (0x008#12)))))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := memcpy_at_80006bd8 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80006bd8 0x80006bd9 0x80006bda 0x80006bdb (b0 := (0x13 : BitVec 8)) (b1 := (0x36 : BitVec 8)) (b2 := (0x86 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x80006bd8#64) vminstret (0x00863613#32)
     (instruction.ITYPE (0x008#12, regidx.Regidx 0x0c#5, regidx.Regidx 0x0c#5, iop.SLTIU))
     Register.x12 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v12 (sign_extend (m := 64) (0x008#12)))))
     (0x13#8) (0x36#8) (0x86#8) (0x00#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_00863613 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00863613#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))

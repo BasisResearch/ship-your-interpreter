@@ -1,4 +1,14 @@
-import Vsa.Sim.StmtChildArm
+import Vsa.Sim.Code.Exec_stmt
+import Vsa.Sim.BridgeSeg
+import Vsa.MemReprReadFields
+import Vsa.Sim.MemRegionWithin
+import Vsa.Sim.PinW
+import Vsa.Sim.Code.Strcmp
+import Vsa.Sim.StepCount
+import Vsa.Sim.TermEntry
+import Vsa.Sim.LayoutInstance
+import Vsa.While.StoreBodiesBoundPreservation
+import Vsa.Sim.ExecRetEpilogue
 
 namespace Vsa.Sim
 
@@ -9,25 +19,6 @@ open Vsa.RuntimeRepr Vsa.MemRepr Vsa.While Vsa.Alloc
 open Vsa.Sim.Code
 
 local notation "SpecSt" => Vsa.While.St
-
-structure HelperCall where
-
-  headPC : BitVec 64
-
-  seg : List BBlock
-
-  jalPC : BitVec 64
-
-  jalImm : BitVec 21
-
-  entry : BitVec 64
-
-namespace HelperCall
-
-def out (H : HelperCall) (L : GRegs) (lds : List (List (BitVec 8))) : SegEvalState :=
-  evalBlocks H.seg (SegEvalState.init L lds)
-
-end HelperCall
 
 theorem sext32_of_lt (b0 b1 b2 b3 : BitVec 8) (k : Nat) (hk : k < 2 ^ 31)
     (hrec : b0.toNat + 256 * (b1.toNat + 256 * (b2.toNat + 256 * b3.toNat)) = k) :

@@ -213,6 +213,28 @@ theorem wp_abortLanding (H : NewlibHoles) (hEL : ErrnoOwn.ErrnoLend (GF := GF) L
   iintro %o'
   iapply hΦ
 
+theorem wp_abort (H : NewlibHoles) (hEL : ErrnoOwn.ErrnoLend (GF := GF) L Room)
+    (live : Nat → Prop) (hlive : CodeLive live)
+    (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
+    (hΦ : ∀ e o, e ≠ 0 → ⊢ Φ (e, o)) (sM : BitVec 64) (n : Nat)
+    (hn : fprintfNeed - 176 ≤ n) (hns : n ≤ (sM - 176#64).toNat)
+    (jb0 imgI imgT : Nat → BitVec 8) (hT : TopLanding inp sM jb0 imgI imgT) :
+    abortRes N L Room inp (sM - 176#64) n ∗ jmpRO inp jb0 ∗
+      ownImg (InExt ((sM - 176#64).toNat, 176)) imgI ∗ ownImg (InExt (sM.toNat + 752, 16)) imgT ∗
+      gp ↦ᵣ□ gpV ∗ binImg
+    ⊢ Wp.W Φ := by
+  unfold abortRes
+  iintro ⟨HA, #Hjb0, HI, HT, #Hgp, #Himg⟩
+  ihave ⟨HC, Hscr⟩ := abortAt_elim _ _ _ $$ HA
+  unfold abortCore
+  icases HC with (Hl | Ho)
+  · ihave ⟨-, Hscr⟩ := stackScratch_narrow hns hn $$ Hscr
+    iapply wp_abortLanding N L Room inp H hEL live hlive Wp (fun o => hΦ 70 o (by decide)) sM jb0
+      imgI imgT hT
+    iframe Hl Hscr Hjb0 HI HT Hgp Himg
+  · iapply wp_abortOom H live hlive Wp (fun o => hΦ 1 o (by decide)) (sM - 176#64) n
+    iframe Ho Hscr Hgp Himg
+
 end Core
 
 end VsaIris.Interp

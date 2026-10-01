@@ -1,5 +1,6 @@
 import VsaIris.Interp.ProofNativePrint
 import VsaIris.Interp.ProofValueTruthy
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -24,10 +25,10 @@ theorem na_arity {n : Nat} (hn : n = 1 ∨ n = 2) :
     have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
       rw [BitVec.toNat_add]; simp; omega
     unfold nativeAssertPC
-    ix_run1 hlive using [h12, h2, hsf] at 0x80002e1c
+    sym_run1 hlive using [h12, h2, hsf] at 0x80002e1c
     all_goals first
       | (intro hc; exfalso; revert hc; ix_reg; exact na_arity hn)
-      | (intro _; ix_run1 hlive using [h12, h2, hsf] at 0x80002e1c)
+      | (intro _; sym_run1 hlive using [h12, h2, hsf] at 0x80002e1c)
 
 #ix_seg na_copy {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
@@ -42,7 +43,7 @@ theorem na_arity {n : Nat} (hn : n = 1 ∨ n = 2) :
   by
     have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
       rw [BitVec.toNat_add]; simp; omega
-    ix_run1 hlive using [h13, h2, hsf, hw0, hw1, hw2] at 0x80002e44
+    sym_run1 hlive using [h13, h2, hsf, hw0, hw1, hw2] at 0x80002e44
 
 theorem na_arity_bad {n : Nat} (hn : ¬ (n = 1 ∨ n = 2)) (hn2 : n < 2 ^ 31) :
     (1#64).toNat < (BitVec.signExtend 64
@@ -76,10 +77,10 @@ theorem na_arity_bad {n : Nat} (hn : ¬ (n = 1 ∨ n = 2)) (hn2 : n < 2 ^ 31) :
     have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
       rw [BitVec.toNat_add]; simp; omega
     unfold nativeAssertPC
-    ix_run1 hlive using [h12, h2, hsf] at 0x80002e90
+    sym_run1 hlive using [h12, h2, hsf] at 0x80002e90
     all_goals first
       | (intro hc; exfalso; apply hc; ix_reg; exact na_arity_bad hn hn2)
-      | (intro _; ix_run1 hlive using [h12, h2, hsf] at 0x80002e90)
+      | (intro _; sym_run1 hlive using [h12, h2, hsf] at 0x80002e90)
 
 #ix_seg na_ok {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
@@ -90,7 +91,7 @@ theorem na_arity_bad {n : Nat} (hn : ¬ (n = 1 ∨ n = 2)) (hn2 : n < 2 ^ 31) :
   by
     have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
       rw [BitVec.toNat_add]; simp; omega
-    ix_run1 hlive using [h2, hsf] at 0x80002e58
+    sym_run1 hlive using [h2, hsf] at 0x80002e58
 
 #ix_seg na_epi {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
@@ -104,7 +105,7 @@ theorem na_arity_bad {n : Nat} (hn : ¬ (n = 1 ∨ n = 2)) (hn2 : n < 2 ^ 31) :
     (hs2' : ldv .ld M (s + 18446744073709551536#64 + 48#64).toNat = v18) :
     IW live ∅ [] (npF s args n) Q 0x80002e5c#64 R M
   by
-    ix_run1 hlive using [h2, hal, hra, hs0, hs1', hs2']
+    sym_run1 hlive using [h2, hal, hra, hs0, hs1', hs2']
 
 #ix_seg na_fail1 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
@@ -118,10 +119,10 @@ theorem na_arity_bad {n : Nat} (hn : ¬ (n = 1 ∨ n = 2)) (hn2 : n < 2 ^ 31) :
       rw [BitVec.toNat_add]; simp; omega
     have hs8 : (s + 18446744073709551536#64 + 8#64).toNat = s.toNat - 80 + 8 := by
       rw [BitVec.toNat_add, hsf]; simp; omega
-    ix_run1 hlive using [h2, h10, hsf, hs8, ha, hc8] at 0x80002ebc
+    sym_run1 hlive using [h2, h10, hsf, hs8, ha, hc8] at 0x80002ebc
     all_goals first
       | (intro hc; exfalso; apply hc; ix_reg; exact h10)
-      | (intro _; ix_run1 hlive using [h2, h10, hsf, hs8, ha, hc8] at 0x80002ebc)
+      | (intro _; sym_run1 hlive using [h2, h10, hsf, hs8, ha, hc8] at 0x80002ebc)
       | skip
 
 #ix_seg na_fail2s {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -139,12 +140,12 @@ theorem na_arity_bad {n : Nat} (hn : ¬ (n = 1 ∨ n = 2)) (hn2 : n < 2 ^ 31) :
       rw [BitVec.toNat_add]; simp; omega
     have hs8 : (s + 18446744073709551536#64 + 8#64).toNat = s.toNat - 80 + 8 := by
       rw [BitVec.toNat_add, hsf]; simp; omega
-    ix_run1 hlive using [h2, h10, hsf, hs8, ha, hc8, hk, hp] at 0x80002ebc
+    sym_run1 hlive using [h2, h10, hsf, hs8, ha, hc8, hk, hp] at 0x80002ebc
     iterate 4 all_goals first
       | (intro hc; exfalso; apply hc; ix_reg; exact h10)
       | (intro hc; exfalso; revert hc; ix_reg; done)
       | (intro hc; exfalso; revert hc; ix_reg; exact hk3)
-      | (intro _; ix_run1 hlive using [h2, h10, hsf, hs8, ha, hc8, hk, hp] at 0x80002ebc)
+      | (intro _; sym_run1 hlive using [h2, h10, hsf, hs8, ha, hc8, hk, hp] at 0x80002ebc)
       | skip
 
 #ix_seg na_fail2o {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -162,12 +163,12 @@ theorem na_arity_bad {n : Nat} (hn : ¬ (n = 1 ∨ n = 2)) (hn2 : n < 2 ^ 31) :
       rw [BitVec.toNat_add]; simp; omega
     have hs8 : (s + 18446744073709551536#64 + 8#64).toNat = s.toNat - 80 + 8 := by
       rw [BitVec.toNat_add, hsf]; simp; omega
-    ix_run1 hlive using [h2, h10, hsf, hs8, ha, hc8, hk] at 0x80002ebc
+    sym_run1 hlive using [h2, h10, hsf, hs8, ha, hc8, hk] at 0x80002ebc
     iterate 4 all_goals first
       | (intro hc; exfalso; apply hc; ix_reg; exact h10)
       | (intro hc; exfalso; revert hc; ix_reg; done)
       | (intro hc; exfalso; revert hc; ix_reg; exact hk3)
-      | (intro _; ix_run1 hlive using [h2, h10, hsf, hs8, ha, hc8, hk] at 0x80002ebc)
+      | (intro _; sym_run1 hlive using [h2, h10, hsf, hs8, ha, hc8, hk] at 0x80002ebc)
       | skip
 
 def naArityBytes : List (BitVec 8) := [0x61#8, 0x73#8, 0x73#8, 0x65#8, 0x72#8, 0x74#8, 0x28#8,
@@ -498,8 +499,8 @@ theorem na_badPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   ihave #Hrd := readable_rodata $$ Himg
   ihave Hk := and_elim_r $$ Hk
   ihave Hk := wand_pure_apply (not_assertOk_len (by rw [hlen]; exact hbad)) $$ Hk
-  iapply (na_rtErr Wp HN hcl (jalx_80002e90 live (fun p hp => c.hlive _ (interp_code_80002e90 p hp)))
-    interp_code_80002e90 (naArity_fmt (fun a ha => ⟨.inl ha, rfl⟩) 0#64 0#64) c.hinp c.hjb c.hs1 hs2 hs3
+  iapply (na_rtErr Wp HN hcl ((step% jalx 0x80002e90) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (naArity_fmt (fun a ha => ⟨.inl ha, rfl⟩) 0#64 0#64) c.hinp c.hjb c.hs1 hs2 hs3
     hlen c.hdfa)
   iframe Hcode Himg Hms Hst Hrd Hjb Hw Hsl Hv Hk
   ipureintro
@@ -629,7 +630,7 @@ theorem na_head (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   ihave #Hvt := valueTruthy_spec c.hlive Wp N (s + 18446744073709551536#64 + 16#64) (vs[0]'(by omega))
   unfold valueTruthySpec
   iapply ms_callHelper Wp (i := 0x80002e44)
-    (jalx_80002e44 live (fun p hp => c.hlive _ (interp_code_80002e44 p hp))) interp_code_80002e44
+    ((step% jalx 0x80002e44) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) (clob := [10, 14, 15]) (pins := fun rv => rv 10 = s + 18446744073709551536#64 + 16#64)
     (Pre := iprop(valAt N (s + 18446744073709551536#64 + 16#64).toNat (vs[0]'(by omega)) ∗
       ⌜SlotGeom (s + 18446744073709551536#64 + 16#64)⌝))
@@ -737,7 +738,7 @@ theorem na_truthyPath (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Stri
   ihave #Hvn := valueNull_spec c.hlive Wp N sret
   unfold valueNullSpec
   iapply ms_callHelper Wp (i := 0x80002e58)
-    (jalx_80002e58 live (fun p hp => c.hlive _ (interp_code_80002e58 p hp))) interp_code_80002e58
+    ((step% jalx 0x80002e58) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) (clob := []) (pins := fun rv => rv 10 = sret)
     (Pre := iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret⌝)) (Post := fun _ => valAt N sret.toNat .null)
   iframe Hcode Hms
@@ -842,8 +843,8 @@ theorem na_falsy1 (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   ihave #Hrd := readable_rodata $$ Himg
   ihave Hk := and_elim_r $$ Hk
   ihave Hk := wand_pure_apply (not_assertOk_falsy _ ht) $$ Hk
-  iapply (na_rtErr Wp HN hcl (jalx_80002ebc live (fun p hp => c.hlive _ (interp_code_80002ebc p hp)))
-    interp_code_80002ebc (naS_fmt (fun a ha => ⟨.inl ha, rfl⟩) (naFail_str (fun a ha => ⟨.inl ha, rfl⟩))
+  iapply (na_rtErr Wp HN hcl ((step% jalx 0x80002ebc) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (naS_fmt (fun a ha => ⟨.inl ha, rfl⟩) (naFail_str (fun a ha => ⟨.inl ha, rfl⟩))
       0#64) c.hinp c.hjb c.hs1 hs2 hs3 hlen c.hdfa)
   iframe Hcode Himg Hms Hst Hrd Hjb Hw Hsl Hv Hk
   ipureintro
@@ -904,8 +905,8 @@ theorem na_falsy2o (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
   ihave #Hrd := readable_rodata $$ Himg
   ihave Hk := and_elim_r $$ Hk
   ihave Hk := wand_pure_apply (not_assertOk_falsy _ ht) $$ Hk
-  iapply (na_rtErr Wp HN hcl (jalx_80002ebc live (fun p hp => c.hlive _ (interp_code_80002ebc p hp)))
-    interp_code_80002ebc (naS_fmt (fun a ha => ⟨.inl ha, rfl⟩) (naFail_str (fun a ha => ⟨.inl ha, rfl⟩))
+  iapply (na_rtErr Wp HN hcl ((step% jalx 0x80002ebc) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (naS_fmt (fun a ha => ⟨.inl ha, rfl⟩) (naFail_str (fun a ha => ⟨.inl ha, rfl⟩))
       0#64) c.hinp c.hjb c.hs1 hs2 hs3 hlen c.hdfa)
   iframe Hcode Himg Hms Hst Hrd Hjb Hw Hsl Hv Hk
   ipureintro
@@ -974,8 +975,8 @@ theorem na_falsy2s (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
       ⟨_, cstrCov_of_img (fun i hi => Or.inl (Or.inr (by simp only [InExt]; omega))) hrd.2.1 hrd.2.2⟩ 0#64
   ihave Hk := and_elim_r $$ Hk
   ihave Hk := wand_pure_apply (not_assertOk_falsy _ ht) $$ Hk
-  iapply (na_rtErr Wp HN hcl (jalx_80002ebc live (fun p hp => c.hlive _ (interp_code_80002ebc p hp)))
-    interp_code_80002ebc hfmt c.hinp c.hjb c.hs1 hs2 hs3 hlen c.hdfa)
+  iapply (na_rtErr Wp HN hcl ((step% jalx 0x80002ebc) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) hfmt c.hinp c.hjb c.hs1 hs2 hs3 hlen c.hdfa)
   iframe Hcode Himg Hms Hst Hrd Hjb Hw Hsl Hv Hk
   ipureintro
   exact ⟨by ix_reg; exact f.h9, by ix_reg; exact f.h18, by ix_reg, by ix_reg, by ix_reg,

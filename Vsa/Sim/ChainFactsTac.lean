@@ -1,253 +1,53 @@
 import Vsa.Sim.DeriveCase
 import Vsa.Sim.Code.Eval_expr
-import Vsa.Sim.DecodeTable.Batch01Part03
-import Vsa.Sim.DecodeTable.Batch01Part06
-import Vsa.Sim.DecodeTable.Batch01Part07
-import Vsa.Sim.DecodeTable.Batch01Part17
-import Vsa.Sim.DecodeTable.Batch01Part25
-import Vsa.Sim.DecodeTable.Batch01Part31
-import Vsa.Sim.DecodeTable.Batch02Part01
-import Vsa.Sim.DecodeTable.Batch02Part06
-import Vsa.Sim.DecodeTable.Batch02Part10
-import Vsa.Sim.DecodeTable.Batch02Part11
-import Vsa.Sim.DecodeTable.Batch02Part12
-import Vsa.Sim.DecodeTable.Batch02Part13
-import Vsa.Sim.DecodeTable.Batch02Part14
-import Vsa.Sim.DecodeTable.Batch02Part18
-import Vsa.Sim.DecodeTable.Batch02Part19
-import Vsa.Sim.DecodeTable.Batch02Part31
-import Vsa.Sim.DecodeTable.Batch03Part04
-import Vsa.Sim.DecodeTable.Batch03Part07
-import Vsa.Sim.DecodeTable.Batch03Part08
-import Vsa.Sim.DecodeTable.Batch03Part10
-import Vsa.Sim.DecodeTable.Batch03Part14
-import Vsa.Sim.DecodeTable.Batch03Part22
-import Vsa.Sim.DecodeTable.Batch03Part24
-import Vsa.Sim.DecodeTable.Batch03Part25
-import Vsa.Sim.DecodeTable.Batch03Part28
-import Vsa.Sim.DecodeTable.Batch03Part31
-import Vsa.Sim.DecodeTable.Batch03Part32
-import Vsa.Sim.DecodeTable.Batch04Part01
-import Vsa.Sim.DecodeTable.Batch04Part05
-import Vsa.Sim.DecodeTable.Batch04Part11
-import Vsa.Sim.DecodeTable.Batch04Part12
-import Vsa.Sim.DecodeTable.Batch04Part20
-import Vsa.Sim.DecodeTable.Batch04Part27
-import Vsa.Sim.DecodeTable.Batch04Part28
-import Vsa.Sim.DecodeTable.Batch05Part02
-import Vsa.Sim.DecodeTable.Batch05Part04
-import Vsa.Sim.DecodeTable.Batch05Part05
-import Vsa.Sim.DecodeTable.Batch05Part06
-import Vsa.Sim.DecodeTable.Batch05Part09
-import Vsa.Sim.DecodeTable.Batch05Part18
-import Vsa.Sim.DecodeTable.Batch05Part23
-import Vsa.Sim.DecodeTable.Batch05Part24
-import Vsa.Sim.DecodeTable.Batch05Part25
-import Vsa.Sim.DecodeTable.Batch05Part32
-import Vsa.Sim.DecodeTable.Batch06Part01
-import Vsa.Sim.DecodeTable.Batch06Part03
-import Vsa.Sim.DecodeTable.Batch06Part05
-import Vsa.Sim.DecodeTable.Batch06Part06
-import Vsa.Sim.DecodeTable.Batch06Part07
-import Vsa.Sim.DecodeTable.Batch06Part08
-import Vsa.Sim.DecodeTable.Batch06Part09
-import Vsa.Sim.DecodeTable.Batch06Part11
-import Vsa.Sim.DecodeTable.Batch06Part12
-import Vsa.Sim.DecodeTable.Batch06Part13
-import Vsa.Sim.DecodeTable.Batch06Part14
-import Vsa.Sim.DecodeTable.Batch06Part19
-import Vsa.Sim.DecodeTable.Batch06Part26
-import Vsa.Sim.DecodeTable.Batch06Part27
-import Vsa.Sim.DecodeTable.Batch07Part01
-import Vsa.Sim.DecodeTable.Batch07Part13
-import Vsa.Sim.DecodeTable.Batch07Part15
-import Vsa.Sim.DecodeTable.Batch07Part19
-import Vsa.Sim.DecodeTable.Batch07Part21
-import Vsa.Sim.DecodeTable.Batch07Part22
-import Vsa.Sim.DecodeTable.Batch07Part24
-import Vsa.Sim.DecodeTable.Batch07Part25
-import Vsa.Sim.DecodeTable.Batch07Part30
-import Vsa.Sim.DecodeTable.Batch07Part31
-import Vsa.Sim.DecodeTable.Batch07Part32
-import Vsa.Sim.DecodeTable.Batch08Part03
-import Vsa.Sim.DecodeTable.Batch08Part04
-import Vsa.Sim.DecodeTable.Batch08Part05
-import Vsa.Sim.DecodeTable.Batch08Part08
-import Vsa.Sim.DecodeTable.Batch08Part09
-import Vsa.Sim.DecodeTable.Batch08Part10
-import Vsa.Sim.DecodeTable.Batch08Part11
-import Vsa.Sim.DecodeTable.Batch08Part13
-import Vsa.Sim.DecodeTable.Batch08Part15
-import Vsa.Sim.DecodeTable.Batch08Part16
-import Vsa.Sim.DecodeTable.Batch08Part18
-import Vsa.Sim.DecodeTable.Batch08Part19
-import Vsa.Sim.DecodeTable.Batch08Part20
-import Vsa.Sim.DecodeTable.Batch08Part25
-import Vsa.Sim.DecodeTable.Batch08Part26
-import Vsa.Sim.DecodeTable.Batch08Part28
-import Vsa.Sim.DecodeTable.Batch08Part32
-import Vsa.Sim.DecodeTable.Batch09Part01
-import Vsa.Sim.DecodeTable.Batch09Part02
-import Vsa.Sim.DecodeTable.Batch09Part03
-import Vsa.Sim.DecodeTable.Batch09Part04
-import Vsa.Sim.DecodeTable.Batch09Part05
-import Vsa.Sim.DecodeTable.Batch09Part06
-import Vsa.Sim.DecodeTable.Batch09Part07
-import Vsa.Sim.DecodeTable.Batch09Part08
-import Vsa.Sim.DecodeTable.Batch09Part11
-import Vsa.Sim.DecodeTable.Batch09Part13
-import Vsa.Sim.DecodeTable.Batch09Part15
-import Vsa.Sim.DecodeTable.Batch09Part16
-import Vsa.Sim.DecodeTable.Batch09Part19
-import Vsa.Sim.DecodeTable.Batch09Part20
-import Vsa.Sim.DecodeTable.Batch09Part21
-import Vsa.Sim.DecodeTable.Batch09Part30
-import Vsa.Sim.DecodeTable.Batch09Part31
-import Vsa.Sim.DecodeTable.Batch09Part32
-import Vsa.Sim.DecodeTable.Batch10Part01
-import Vsa.Sim.DecodeTable.Batch10Part02
-import Vsa.Sim.DecodeTable.Batch10Part03
-import Vsa.Sim.DecodeTable.Batch10Part04
-import Vsa.Sim.DecodeTable.Batch10Part05
-import Vsa.Sim.DecodeTable.Batch10Part07
-import Vsa.Sim.DecodeTable.Batch10Part08
-import Vsa.Sim.DecodeTable.Batch10Part09
-import Vsa.Sim.DecodeTable.Batch10Part10
-import Vsa.Sim.DecodeTable.Batch10Part11
-import Vsa.Sim.DecodeTable.Batch10Part12
-import Vsa.Sim.DecodeTable.Batch10Part13
-import Vsa.Sim.DecodeTable.Batch10Part15
-import Vsa.Sim.DecodeTable.Batch10Part27
-import Vsa.Sim.DecodeTable.Batch10Part28
-import Vsa.Sim.DecodeTable.Batch10Part31
-import Vsa.Sim.DecodeTable.Batch10Part32
-import Vsa.Sim.DecodeTable.Batch11Part01
-import Vsa.Sim.DecodeTable.Batch11Part02
-import Vsa.Sim.DecodeTable.Batch11Part05
-import Vsa.Sim.DecodeTable.Batch11Part06
-import Vsa.Sim.DecodeTable.Batch11Part07
-import Vsa.Sim.DecodeTable.Batch11Part08
-import Vsa.Sim.DecodeTable.Batch11Part09
-import Vsa.Sim.DecodeTable.Batch11Part10
-import Vsa.Sim.DecodeTable.Batch11Part11
-import Vsa.Sim.DecodeTable.Batch11Part13
-import Vsa.Sim.DecodeTable.Batch11Part14
-import Vsa.Sim.DecodeTable.Batch11Part16
-import Vsa.Sim.DecodeTable.Batch11Part18
-import Vsa.Sim.DecodeTable.Batch11Part26
-import Vsa.Sim.DecodeTable.Batch11Part28
-import Vsa.Sim.DecodeTable.Batch11Part30
-import Vsa.Sim.DecodeTable.Batch12Part01
-import Vsa.Sim.DecodeTable.Batch12Part02
-import Vsa.Sim.DecodeTable.Batch12Part04
-import Vsa.Sim.DecodeTable.Batch12Part05
-import Vsa.Sim.DecodeTable.Batch12Part06
-import Vsa.Sim.DecodeTable.Batch12Part09
-import Vsa.Sim.DecodeTable.Batch12Part10
-import Vsa.Sim.DecodeTable.Batch12Part11
-import Vsa.Sim.DecodeTable.Batch12Part12
-import Vsa.Sim.DecodeTable.Batch12Part13
-import Vsa.Sim.DecodeTable.Batch12Part14
-import Vsa.Sim.DecodeTable.Batch12Part15
-import Vsa.Sim.DecodeTable.Batch12Part17
-import Vsa.Sim.DecodeTable.Batch12Part20
-import Vsa.Sim.DecodeTable.Batch12Part22
-import Vsa.Sim.DecodeTable.Batch12Part23
-import Vsa.Sim.DecodeTable.Batch12Part24
-import Vsa.Sim.DecodeTable.Batch12Part25
-import Vsa.Sim.DecodeTable.Batch12Part26
-import Vsa.Sim.DecodeTable.Batch12Part28
-import Vsa.Sim.DecodeTable.Batch12Part29
-import Vsa.Sim.DecodeTable.Batch12Part30
-import Vsa.Sim.DecodeTable.Batch12Part31
-import Vsa.Sim.DecodeTable.Batch12Part32
-import Vsa.Sim.DecodeTable.Batch13Part03
-import Vsa.Sim.DecodeTable.Batch13Part05
-import Vsa.Sim.DecodeTable.Batch13Part07
-import Vsa.Sim.DecodeTable.Batch13Part08
-import Vsa.Sim.DecodeTable.Batch13Part09
-import Vsa.Sim.DecodeTable.Batch13Part10
-import Vsa.Sim.DecodeTable.Batch13Part11
-import Vsa.Sim.DecodeTable.Batch13Part12
-import Vsa.Sim.DecodeTable.Batch13Part13
-import Vsa.Sim.DecodeTable.Batch13Part14
-import Vsa.Sim.DecodeTable.Batch13Part15
-import Vsa.Sim.DecodeTable.Batch13Part16
-import Vsa.Sim.DecodeTable.Batch13Part17
-import Vsa.Sim.DecodeTable.Batch13Part18
-import Vsa.Sim.DecodeTable.Batch13Part19
-import Vsa.Sim.DecodeTable.Batch13Part20
-import Vsa.Sim.DecodeTable.Batch13Part21
-import Vsa.Sim.DecodeTable.Batch13Part22
-import Vsa.Sim.DecodeTable.Batch13Part23
-import Vsa.Sim.DecodeTable.Batch13Part24
-import Vsa.Sim.DecodeTable.Batch13Part25
-import Vsa.Sim.DecodeTable.Batch13Part26
-import Vsa.Sim.DecodeTable.Batch13Part27
-import Vsa.Sim.DecodeTable.Batch13Part28
-import Vsa.Sim.DecodeTable.Batch13Part29
-import Vsa.Sim.DecodeTable.Batch13Part31
-import Vsa.Sim.DecodeTable.Batch13Part32
-import Vsa.Sim.DecodeTable.Batch14Part01
-import Vsa.Sim.DecodeTable.Batch14Part02
-import Vsa.Sim.DecodeTable.Batch14Part03
-import Vsa.Sim.DecodeTable.Batch14Part04
-import Vsa.Sim.DecodeTable.Batch14Part06
-import Vsa.Sim.DecodeTable.Batch14Part07
-import Vsa.Sim.DecodeTable.Batch14Part09
-import Vsa.Sim.DecodeTable.Batch14Part12
-import Vsa.Sim.DecodeTable.Batch14Part13
-import Vsa.Sim.DecodeTable.Batch14Part14
-import Vsa.Sim.DecodeTable.Batch14Part15
-import Vsa.Sim.DecodeTable.Batch14Part16
-import Vsa.Sim.DecodeTable.Batch14Part17
-import Vsa.Sim.DecodeTable.Batch14Part18
-import Vsa.Sim.DecodeTable.Batch14Part19
-import Vsa.Sim.DecodeTable.Batch14Part20
-import Vsa.Sim.DecodeTable.Batch14Part21
-import Vsa.Sim.DecodeTable.Batch14Part22
-import Vsa.Sim.DecodeTable.Batch14Part23
-import Vsa.Sim.DecodeTable.Batch14Part24
-import Vsa.Sim.DecodeTable.Batch14Part25
-import Vsa.Sim.DecodeTable.Batch14Part26
-import Vsa.Sim.DecodeTable.Batch14Part27
-import Vsa.Sim.DecodeTable.Batch14Part28
-import Vsa.Sim.DecodeTable.Batch14Part29
-import Vsa.Sim.DecodeTable.Batch14Part30
-import Vsa.Sim.DecodeTable.Batch14Part32
-import Vsa.Sim.DecodeTable.Batch15Part01
-import Vsa.Sim.DecodeTable.Batch15Part05
-import Vsa.Sim.DecodeTable.Batch15Part06
-import Vsa.Sim.DecodeTable.Batch15Part07
-import Vsa.Sim.DecodeTable.Batch15Part08
-import Vsa.Sim.DecodeTable.Batch15Part09
-import Vsa.Sim.DecodeTable.Batch15Part10
-import Vsa.Sim.DecodeTable.Batch15Part11
-import Vsa.Sim.DecodeTable.Batch15Part12
-import Vsa.Sim.DecodeTable.Batch15Part13
-import Vsa.Sim.DecodeTable.Batch15Part14
-import Vsa.Sim.DecodeTable.Batch15Part15
-import Vsa.Sim.DecodeTable.Batch15Part16
-import Vsa.Sim.DecodeTable.Batch15Part17
-import Vsa.Sim.DecodeTable.Batch15Part18
-import Vsa.Sim.DecodeTable.Batch15Part19
-import Vsa.Sim.DecodeTable.Batch15Part20
-import Vsa.Sim.DecodeTable.Batch15Part24
-import Vsa.Sim.DecodeTable.Batch15Part30
-import Vsa.Sim.DecodeTable.Batch15Part31
-import Vsa.Sim.DecodeTable.Batch16Part02
-import Vsa.Sim.DecodeTable.Batch16Part04
-import Vsa.Sim.DecodeTable.Batch16Part06
-import Vsa.Sim.DecodeTable.Batch16Part07
-import Vsa.Sim.DecodeTable.Batch16Part08
-import Vsa.Sim.DecodeTable.Batch16Part27
-import Vsa.Sim.DecodeTable.Batch16Part32
-import Vsa.Sim.DecodeTable.Batch17
+import Vsa.Sim.DecodeNF
+import Vsa.Sim.TextImage
 
 open Lean Elab Tactic Meta
 open LeanRV64DExecutable (Register)
 
 namespace Vsa.Sim
+
+/-- A byte-pin leaf of any body line, from a piece footprint present in memory. -/
+theorem bytePinsM_of_text {ps : List TextPiece} {m : Std.ExtHashMap Nat (BitVec 8)}
+    (hT : TextIn (piecesText ps) m) {a : MInstr}
+    (hb : bytesHasB ps a.pc.toNat [a.b0, a.b1, a.b2, a.b3] = true) : BytePinsM m a :=
+  hT.pin4 hb
+
+/-- A byte-pin leaf of any terminator, from a piece footprint present in memory. -/
+theorem bytePinsT_of_text {ps : List TextPiece} {m : Std.ExtHashMap Nat (BitVec 8)}
+    (hT : TextIn (piecesText ps) m) {t : TInstr}
+    (hb : bytesHasB ps t.pc.toNat [t.b0, t.b1, t.b2, t.b3] = true) : BytePinsT m t :=
+  hT.pin4 hb
+
+/-- The piece-footprint hypotheses reachable from `h : TextIn T m` by splitting appends and
+    unfolding definitions of `T`. -/
+partial def cfTextCands (h T : Expr) : MetaM (Array Expr) := do
+  let T ← whnfCore (← instantiateMVars T)
+  if T.isAppOfArity ``HAppend.hAppend 6 then
+    let A := T.getArg! 4
+    let B := T.getArg! 5
+    let hl ← mkAppOptM ``TextIn.left #[none, A, B, h]
+    let hr ← mkAppOptM ``TextIn.right #[none, A, B, h]
+    return (← cfTextCands hl A) ++ (← cfTextCands hr B)
+  if T.isAppOf ``piecesText then return #[h]
+  match ← unfoldDefinition? T with
+  | some T' => cfTextCands h T'
+  | none => return #[]
+
+/-- Candidates from the hypothesis term: its type is `TextLoaded T m`, `TextIn T m`, or the
+    unfolded `∀ p ∈ T, m[p.1]? = some p.2`. -/
+def cfHypCands (h : Expr) : MetaM (Array Expr) := do
+  let rec go (ty : Expr) (fuel : Nat) : MetaM (Array Expr) := do
+    let ty := (← whnfCore (← instantiateMVars ty)).consumeMData
+    if ty.getAppNumArgs == 2 then
+      if let some c := ty.getAppFn.constName? then
+        if c == ``TextIn || c == `VsaIris.Sym.TextLoaded then
+          return ← cfTextCands h (ty.getArg! 0)
+    match fuel, ← unfoldDefinition? ty with
+    | fuel + 1, some ty' => go ty' fuel
+    | _, _ => return #[]
+  go (← inferType h) 8
 
 private def cfBvLitNat? (e : Expr) : MetaM (Option Nat) := do
   match ← getBitVecValue? e with
@@ -265,6 +65,22 @@ private def cfLastArg? (ty : Expr) : MetaM (Option Expr) := do
   | some a => return some (← whnf a)
   | none => return none
 
+/-- Close a byte-pin leaf generically from the piece footprints of `hs`. -/
+private def cfClosePinsGeneric (hs : Array Expr) (lem : Name) (g : MVarId) : TacticM Bool := do
+  for h in hs do
+    let saved ← saveState
+    try
+      let e ← g.withContext (mkAppM lem #[h])
+      let gs ← g.apply e
+      let mut ok := true
+      for g' in gs do
+        let r ← evalTacticAt (← `(tactic| decide)) g'
+        unless r.isEmpty do ok := false
+      if ok then return true
+      saved.restore
+    catch _ => saved.restore
+  return false
+
 private def cfCloseLeaf (h : Term) (g : MVarId) (ty : Expr) (nm : Nat → String)
     (fieldIdx : Nat) (applyH : Bool) : TacticM Unit := do
   let some a ← cfLastArg? ty | throwError "chain_facts: no instruction literal"
@@ -273,27 +89,35 @@ private def cfCloseLeaf (h : Term) (g : MVarId) (ty : Expr) (nm : Nat → String
   let stx ← if applyH then `($(mkIdent (nm n).toName) $h) else `($(mkIdent (nm n).toName))
   g.assign (← g.withContext (Term.elabTermEnsuringType stx ty))
 
-private partial def cfSolve (h : Term) (prefixStr : String) (g : MVarId) :
-    TacticM (List MVarId) := do
-  let decodeName (w : Nat) : String := "Vsa.Sim.DecodeTable.decode_" ++ cfHexName w
+/-- A decode leaf: `decodeW` computes the instruction of the literal word by `rfl`. -/
+private def cfCloseDecode (g : MVarId) (ty : Expr) : TacticM Unit := do
+  let stx ← `(fun s h1 h2 h3 => Vsa.Sim.decodeW s h1 h2 h3)
+  g.assign (← g.withContext (Term.elabTermEnsuringType stx ty))
+
+private partial def cfSolve (h : Term) (prefixStr : String) (g : MVarId)
+    (hs : Array Expr := #[]) : TacticM (List MVarId) := do
   let pinName (pc : Nat) : String := prefixStr ++ cfHexName pc
   let ty := (← instantiateMVars (← g.getType)).consumeMData
   match ty.getAppFn.constName? with
   | some ``And =>
       let gs ← g.apply (← mkConstWithFreshMVarLevels ``And.intro)
       let mut acc : List MVarId := []
-      for g' in gs do acc := acc ++ (← cfSolve h prefixStr g')
+      for g' in gs do acc := acc ++ (← cfSolve h prefixStr g' hs)
       return acc
-  | some ``BytePinsM => cfCloseLeaf h g ty pinName 0 true; return []
-  | some ``DecodeFactM => cfCloseLeaf h g ty decodeName 1 false; return []
-  | some ``BytePinsT => cfCloseLeaf h g ty pinName 0 true; return []
-  | some ``DecodeFactT => cfCloseLeaf h g ty decodeName 1 false; return []
+  | some ``BytePinsM =>
+      if ← cfClosePinsGeneric hs ``bytePinsM_of_text g then return []
+      cfCloseLeaf h g ty pinName 0 true; return []
+  | some ``DecodeFactM => cfCloseDecode g ty; return []
+  | some ``BytePinsT =>
+      if ← cfClosePinsGeneric hs ``bytePinsT_of_text g then return []
+      cfCloseLeaf h g ty pinName 0 true; return []
+  | some ``DecodeFactT => cfCloseDecode g ty; return []
   | some ``True => g.assign (mkConst ``True.intro); return []
   | some ``ChainFacts | some ``BBlockFacts | some ``ProgFactsM
   | some ``TermPins | some ``TermFactsO =>
 
       let g' ← g.change (← g.withContext (whnf ty))
-      cfSolve h prefixStr g'
+      cfSolve h prefixStr g' hs
   | _ =>
 
       if ← g.withContext (isDefEq ty (mkConst ``True)) then
@@ -301,8 +125,24 @@ private partial def cfSolve (h : Term) (prefixStr : String) (g : MVarId) :
       else
         return [g]
 
-elab "chain_facts " h:term " with " pfx:str : tactic => do
-  let leftovers ← cfSolve h pfx.getString (← getMainGoal)
+/-- `chain_facts h` closes the code leaves of a `ChainFacts` goal: byte pins from the piece
+    footprint of `h` (a `TextLoaded`/`TextIn` hypothesis), decode facts by `decodeW`.
+    The optional `with "prefix"` names per-address pin lemmas `prefix<pc>` applied to `h`
+    when `h` carries no piece footprint. -/
+def chainFactsCore (h : Term) (pstr : String) : TacticM Unit := do
+  let g ← getMainGoal
+  let hs ← g.withContext do
+    try cfHypCands (← Term.elabTerm h none) catch _ => pure #[]
+  let leftovers ← cfSolve h pstr g hs
   setGoals leftovers
+
+/-- `chain_facts h` closes the code leaves of a `ChainFacts` goal: byte pins from the piece
+    footprint of `h` (a `TextLoaded`/`TextIn` hypothesis), decode facts by `decodeW`.
+    With `with "prefix"`, per-address pin lemmas `prefix<pc>` applied to `h` close the byte
+    pins that `h` carries no piece footprint for. -/
+elab "chain_facts " h:term " with " pfx:str : tactic => chainFactsCore h pfx.getString
+
+@[inherit_doc chainFactsCore]
+elab "chain_facts " h:term : tactic => chainFactsCore h ""
 
 end Vsa.Sim

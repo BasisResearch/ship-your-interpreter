@@ -1,6 +1,7 @@
 import VsaIris.Vsa.ErrnoOwn
 import VsaIris.Interp.CallArm
 import VsaIris.Interp.SpecValue
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -231,7 +232,7 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     (hW2 : ldv .ld Mt (s + 18446744073709550528#64 + 112#64).toNat = w2)
     (hK : ldv .lw Mt (s + 18446744073709550528#64 + 96#64).toNat = 5#64) :
     IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003254#64 R Mt
-  by ix_run hlive using [h8, h2, hW0, hW1, hW2, hK, hsf] at 0x800039f4
+  by sym_run hlive using [h8, h2, hW0, hW1, hW2, hK, hsf] at 0x800039f4
 
 #ix_seg CallN_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -246,6 +247,6 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     (hS2 : ldv .ld Mt (s + 18446744073709550528#64 + 1056#64).toNat = v18)
     (hS7 : ldv .ld Mt (s + 18446744073709550528#64 + 1016#64).toNat = v23) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x800039f8#64 R Mt
-  by ix_run hlive using [h2, hRA, hS0, hS1, hS2, hS7, hsf, hal]
+  by sym_run hlive using [h2, hRA, hS0, hS1, hS2, hS7, hsf, hal]
 
 end VsaIris.Interp

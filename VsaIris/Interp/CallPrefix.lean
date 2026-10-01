@@ -183,8 +183,8 @@ open VsaIris.Inst Vsa.RuntimeRepr
   ihave Hf := hf
   rw [show k + (nf + na) = k + na + nf by omega]
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800031bc)
-    (jalx_800031bc live (fun p hp => hlive _ (interp_code_800031bc p hp)))
-    interp_code_800031bc (by decide) Df (k := k + na) (slot := s + 18446744073709550528#64 + 96#64)
+    ((step% jalx 0x800031bc) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) Df (k := k + na) (slot := s + 18446744073709550528#64 + 96#64)
     (aC := BitVec.ofNat 64 aF) (aE := aE) (s := s + 18446744073709550528#64)
     (m := evalNeed (.call f args) d - 1088)
     gF.child gF.fits gF.below gF.slotGeom hbf

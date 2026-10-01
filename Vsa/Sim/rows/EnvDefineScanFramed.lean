@@ -1,5 +1,5 @@
 import Vsa.Sim.SegToTripleFramed
-import Vsa.Sim.BridgeSegFramed
+import Vsa.Sim.BridgeSeg
 import Vsa.Sim.EnvGetSpec3
 import Vsa.Sim.rows.EnvDefineEpilogueCore
 

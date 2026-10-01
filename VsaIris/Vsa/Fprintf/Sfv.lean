@@ -1,10 +1,11 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.SbFile
 import VsaIris.Vsa.Fprintf.Arith
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 abbrev sfvKeep : List Nat := [2, 8, 20, 21, 23, 24, 25, 26, 27]
 
@@ -91,7 +92,7 @@ theorem sfv_fetch (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem
   have hn8 : (BitVec.ofNat 64 (nxt + 8)).toNat = nxt + 8 := by simp only [BitVec.toNat_ofNat]; omega
   have e0 : BitVec.ofNat 64 nxt + LeanRV64DExecutable.Functions.sign_extend (m := 64) (0x000#12) =
       BitVec.ofNat 64 nxt := by rw [show LeanRV64DExecutable.Functions.sign_extend (m := 64) (0x000#12) = 0#64 by decide, BitVec.add_zero]
-  refine it_8000dfc0 hlive (fun _ => ?_) (fun hc => absurd (by rw [h19]) hc)
+  refine (step% it 0x8000dfc0) hlive (fun _ => ?_) (fun hc => absurd (by rw [h19]) hc)
   nx_run hlive using [h9, h19, e0, hs, hl, ofNat_add_ofNat] at 2147540928
   refine hk _ ⟨?_, ?_, ?_, ?_, ?_, by keep_chain hR.keep⟩
   all_goals rsimp
@@ -148,7 +149,7 @@ theorem sfv_copyA (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000dfc0#64 R Mt := by
   obtain ⟨h8, _, _, _, _⟩ := hR.k2 hRh
   have h19 := hR.len; have h22 := hR.src; have h15 := hR.p; have h13 := hR.flags; have hn := hR.nxt
-  refine it_8000dfc0 hlive (fun hc => ?_) (fun _ => ?_)
+  refine (step% it 0x8000dfc0) hlive (fun hc => ?_) (fun _ => ?_)
   · exfalso; rw [h19] at hc; have := congrArg BitVec.toNat hc; simp only [BitVec.toNat_ofNat] at this; omega
   nx_run hlive using [h8, h19, h22, h15, h13, hw, hBl, hsz, BitVec.add_assoc, ofNat_add_ofNat] at 2147510724
   all_goals (simp (config := {failIfUnchanged := false}) only [upd_apply, Nat.reduceEqDiff, ite_true,
@@ -195,7 +196,7 @@ theorem sfv_copyB (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt Mt0 :
       (∀ x ∈ sfvKeep, R' x = Rh x) → SbFile M' f pend' → Frame M' Mt0 (SfvReg f.toNat fp.toNat) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) 0x8000e258#64 R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000e294#64 R Mt := by
-  obtain ⟨h8, h20, h21, h24, h2⟩ := (⟨hkeep 8 (by decide) |>.trans hRh.file, hkeep 20 (by decide) |>.trans hRh.uio,
+  nx_win fp 256 0; obtain ⟨h8, h20, h21, h24, h2⟩ := (⟨hkeep 8 (by decide) |>.trans hRh.file, hkeep 20 (by decide) |>.trans hRh.uio,
     hkeep 21 (by decide) |>.trans hRh.reent, hkeep 24 (by decide) |>.trans hRh.imax,
     hkeep 2 (by decide) |>.trans hRh.sp⟩ : R 8 = f ∧ R 20 = U ∧ R 21 = 0x8001b538#64 ∧ R 24 = 0x7fffffff#64 ∧ R 2 = fp)
   have hk1024 := hF0.len
@@ -301,11 +302,11 @@ theorem sfv_direct (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q
         (t ++ putcs (copyBytes g src (L - L % 1024))) 0x8000e258#64 R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000dfc0#64 R Mt := by
-  obtain ⟨h8, h20, h21, h24, h2⟩ := hR.k2 hRh
+  nx_win fp 256 0; obtain ⟨h8, h20, h21, h24, h2⟩ := hR.k2 hRh
   have h19 := hR.len; have h22 := hR.src; have h15 := hR.p; have h13 := hR.flags; have h9 := hR.nxt
   have hw' := hF.w; have hBl := hF.base; have hsz := hF.size; have hwr := hF.writer; have hck := hF.cookie
   simp only [List.length_nil] at hw'
-  refine it_8000dfc0 hlive (fun hc => ?_) (fun _ => ?_)
+  refine (step% it 0x8000dfc0) hlive (fun hc => ?_) (fun _ => ?_)
   · exfalso; rw [h19] at hc; have := congrArg BitVec.toNat hc; simp only [BitVec.toNat_ofNat] at this; omega
   nx_run hlive using [h8, h19, h22, h15, h13, h24, hw', hBl, hsz, BitVec.add_assoc, ofNat_add_ofNat] at 2147501864
   have hsx : BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 L)) = BitVec.ofNat 64 L := by

@@ -7,6 +7,7 @@ import VsaIris.Interp.NewlibCall
 import VsaIris.Interp.LeafCalls
 import VsaIris.Vsa.MainOk
 import VsaIris.Interp.ExecDisp
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -20,7 +21,7 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     (hs : 0x87800000 + 176 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h2 : R 2 = s) :
     IW live m [] (InExt (s.toNat - 176, 176)) Q 0x800043ec#64 R Mt
-  by ix_run hlive using [h2, hsf] at 0x80004424
+  by sym_run hlive using [h2, hsf] at 0x80004424
 
 #ix_seg TopHead_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -31,7 +32,7 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     (hcnt : ldv .ld Mt (s + 18446744073709551440#64 + 16#64).toNat = cnt)
     (harr : ldv .ld Mt (s + 18446744073709551440#64 + 24#64).toNat = arr) :
     IW live m [] (InExt (s.toNat - 176, 176)) Q 0x80004428#64 R Mt
-  by ix_run hlive using [h2, h10, hcnt, harr, hsf] at 0x8000448c 0x80004514
+  by sym_run hlive using [h2, h10, hcnt, harr, hsf] at 0x8000448c 0x80004514
 
 #ix_seg TopEpi_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -41,7 +42,7 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     (h2 : R 2 = s + 18446744073709551440#64)
     (hRA : ldv .ld Mt (s + 18446744073709551440#64 + 168#64).toNat = 0x800045ec#64) :
     IW live m [] (interpS s) Q 0x80004514#64 R Mt
-  by ix_run hlive using [h2, hRA, hsf, interpS]
+  by sym_run hlive using [h2, hRA, hsf, interpS]
 
 section Setjmp
 
@@ -67,11 +68,11 @@ theorem ms_callSetjmp (hlive : ∀ p ∈ interpText, live p.1) (hcl : CodeLive l
     ⊢ Wp.W Φ := by
   unfold ms
   iintro ⟨#Hcode, #Himg, ⟨Hpc, Hra, Hregs, HS⟩, HJ, Hk⟩
-  ihave #Hi := instrAt_of_codeRes interp_code_80004424 $$ Hcode
+  ihave #Hi := instrAt_of_codeRes (interp_code (i := 0x80004424) (code := [0xef#8, 0x20#8, 0x90#8, 0x3d#8]) (by decide)) $$ Hcode
   ihave ⟨Hsp, Hcs, Htmp, Hargs⟩ := (regFile_newlib R).1 $$ Hregs
   ihave ⟨Ha0, Hargs⟩ := (sepL_args_split R).1 $$ Hargs
   ihave #Hspec := setjmp_spec live hcl Wp jbp (R 2) R img0 hjb
-  iapply wp_callW Wp (jalx_80004424 live (fun p hp => hlive _ (interp_code_80004424 p hp)))
+  iapply wp_callW Wp ((step% jalx 0x80004424) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
   iframe Hi Hspec Hpc Hra
   isplitl [Ha0 Hsp Hcs HJ]
   · rw [h10]

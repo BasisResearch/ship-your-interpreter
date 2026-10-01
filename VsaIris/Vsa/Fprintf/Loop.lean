@@ -1,9 +1,10 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Lld
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 
@@ -69,7 +70,7 @@ structure VfpHeadPost (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp : BitVec 64)
     (hk : ∀ R' Mt', VfpHeadPost R R' Mt Mt' sp →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a9b0#64 R' Mt') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a944#64 R Mt by
-  nf_go 2 [14] hlive using [h2, BitVec.add_assoc] at 2147527088
+  nx_win sp 1024 592; nf_go 2 [14] hlive using [h2, BitVec.add_assoc] at 2147527088
 
 #ix_piece vfpHead_2 from vfpHead_1 by
   nf_go 1 [14] hlive using [h2, BitVec.add_assoc] at 2147527088

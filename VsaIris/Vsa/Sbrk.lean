@@ -82,14 +82,14 @@ theorem sbrk_r_gen {live S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat →
   unfold brkAddr at hbrk
   sx_run [8] hlive at 0x8000011c
   simp (disch := decide) only [ldv_at hbrk]
-  refine st_8000011c hlive (fun h => ?_) (fun _ => ?_)
+  refine (step% st 0x8000011c) hlive (fun h => ?_) (fun _ => ?_)
   · exfalso
     simp only [upd_apply, Nat.reduceEqDiff, ite_true] at h
     have := congrArg BitVec.toNat h
     rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)] at this
     simp at this; omega
   sx_run [4] hlive at 0x8000012c
-  refine st_8000012c hlive (fun hbad => ?_) (fun hok' => ?_)
+  refine (step% st 0x8000012c) hlive (fun hbad => ?_) (fun hok' => ?_)
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hbad
     sx_run [30] hlive at 0x8000016c
     simp only [impure_val] at *

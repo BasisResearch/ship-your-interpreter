@@ -1,9 +1,12 @@
-import VsaIris.Vsa.SymData
 import VsaIris.Vsa.SymObs
 import VsaIris.Vsa.BinImg
 import Vsa.Sim.MemcpySpec4
 import Vsa.Sim.EqNeReprReadback
-import Vsa.Sim.EvalChildArm
+import Vsa.Sim.Code.Exec_stmt
+import Vsa.Sim.Code.Interp_run
+import Vsa.Sim.AstTransport
+import Vsa.MemReprReadFields
+import Vsa.Sim.MemRegionWithin
 
 namespace VsaIris.Memcpy
 
@@ -56,10 +59,7 @@ abbrev mText : List (Nat × BitVec 8) := Strlen.codeText memcpyBase memcpyCode
 
 theorem memcpyLoaded_of_text {m : Mem} (h : TextLoaded mText m) : Code.MemcpyLoaded m := by
   have h' : ∀ a b, (a, b) ∈ mText → m[a]? = some b := fun a b hab => h (a, b) hab
-  unfold Code.MemcpyLoaded Code.memcpyChunk0 Code.memcpyChunk1 Code.memcpyChunk2
-    Code.memcpyChunk3 Code.memcpyChunk4
-  repeat' apply And.intro
-  all_goals (apply h'; decide)
+  exact Vsa.Sim.TextIn.of_list (fun p hp => h' p.1 p.2 hp) (by decide +kernel)
 
 abbrev mRegs : List Nat := [VsaIris.PC, 1, 10, 11, 12, 13, 14, 15, 16, 17, 5, 6, 28, 29, 30, 31]
 

@@ -1,6 +1,6 @@
 import VsaIris.Vsa.Strlen
 import VsaIris.Vsa.AllocRun
-import Vsa.Sim.DecodeTable.Batch04Part25
+import Vsa.Sim.DecodeNF
 
 namespace VsaIris.Sym
 
@@ -66,17 +66,6 @@ theorem exec_sltu_a4_a5_a4 (σ : MState) (pc : BitVec 64) (v14 v15 : BitVec 64)
     (rX_bits_x15 _ v15 h15) (rX_bits_x14 _ v14 h14)
     (wX_bits_x14 _ (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v15 v14))))
 
-theorem alloc_code_800052d0 :
-    ∀ p ∈ codeFoot 0x800052d0 [0x33#8, 0xb7#8, 0xe7#8, 0x00#8], (p.1, p.2.2) ∈ allocText := by
-  intro p hp
-  simp only [codeFoot, List.zipIdx, List.zipIdx_cons, List.zipIdx_nil, List.map_cons, List.map_nil,
-    List.mem_cons, List.not_mem_nil, or_false] at hp
-  rcases hp with rfl | rfl | rfl | rfl
-  · exact List.mem_append_left allocNode180_360 (List.mem_append_right allocNode0_90 (List.mem_append_right allocNode90_135 (List.mem_append_left allocNode157_180 (List.mem_append_right allocNode135_146 (List.mem_append_right allocNode146_151 (List.mem_append_right allocNode151_154 (List.mem_append_left allocNode155_157 ((by decide : ((0x800052d0 : Nat), (0x33#8 : BitVec 8)) ∈ allocChunk154)))))))))
-  · exact List.mem_append_left allocNode180_360 (List.mem_append_right allocNode0_90 (List.mem_append_right allocNode90_135 (List.mem_append_left allocNode157_180 (List.mem_append_right allocNode135_146 (List.mem_append_right allocNode146_151 (List.mem_append_right allocNode151_154 (List.mem_append_left allocNode155_157 ((by decide : ((0x800052d1 : Nat), (0xb7#8 : BitVec 8)) ∈ allocChunk154)))))))))
-  · exact List.mem_append_left allocNode180_360 (List.mem_append_right allocNode0_90 (List.mem_append_right allocNode90_135 (List.mem_append_left allocNode157_180 (List.mem_append_right allocNode135_146 (List.mem_append_right allocNode146_151 (List.mem_append_right allocNode151_154 (List.mem_append_left allocNode155_157 ((by decide : ((0x800052d2 : Nat), (0xe7#8 : BitVec 8)) ∈ allocChunk154)))))))))
-  · exact List.mem_append_left allocNode180_360 (List.mem_append_right allocNode0_90 (List.mem_append_right allocNode90_135 (List.mem_append_left allocNode157_180 (List.mem_append_right allocNode135_146 (List.mem_append_right allocNode146_151 (List.mem_append_right allocNode151_154 (List.mem_append_left allocNode155_157 ((by decide : ((0x800052d3 : Nat), (0x00#8 : BitVec 8)) ∈ allocChunk154)))))))))
-
 theorem sltu_word :
     (((0x00#8).append (0xe7#8)).append (0xb7#8)).append (0x33#8) = (0x00e7b733#32 : BitVec 32) := by
   apply BitVec.eq_of_toNat_eq; decide
@@ -91,7 +80,7 @@ theorem sltuAluStep {live : Nat → Prop} (hlive : ∀ p ∈ allocText, live p.1
       (codeFoot 0x800052d0 [0x33#8, 0xb7#8, 0xe7#8, 0x00#8]) 14
       (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v15 v14))) := by
   intro c hok hpc hRR hMR
-  have hread := readBytes_present hok _ hMR (fun p hp => hlive _ (alloc_code_800052d0 p hp))
+  have hread := readBytes_present hok _ hMR (fun p hp => hlive _ ((alloc_code (by decide)) p hp))
   have hb : ∀ k (b : BitVec 8), ((0x800052d0 + k : Nat), DFrac.discard, b) ∈
       codeFoot 0x800052d0 [0x33#8, 0xb7#8, 0xe7#8, 0x00#8] → c.σ.mem[0x800052d0 + k]? = some b :=
     fun k b h => hread _ h
@@ -116,7 +105,7 @@ theorem sltuAluStep {live : Nat → Prop} (hlive : ∀ p ∈ allocText, live p.1
       Register.x14 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v15 v14)))
       (0x33#8) (0xb7#8) (0xe7#8) (0x00#8)
       hok.good hpcσ hvm sltu_word sltu_notrvc
-      (Vsa.Sim.DecodeTable.decode_00e7b733 (afterPrelude c.σ)
+      (Vsa.Sim.decodeW (w := 0x00e7b733#32) (afterPrelude c.σ)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hok.good.misa)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hok.good.cur_privilege)
         (by rw [get?_afterPrelude c.σ _ (by decide)]; exact hok.good.mseccfg))
@@ -177,7 +166,7 @@ theorem st_800052d0 {live : Nat → Prop} {S : Nat → Prop}
     (hk : AW live S Q 0x800052d4#64
       (upd R 14 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u (R 15) (R 14))))) Mt) :
     AW live S Q 0x800052d0#64 R Mt :=
-  swp_aluRR 0x800052d0 _ _ 14 _ (sltuAluStep hlive (R 14) (R 15)) alloc_code_800052d0
+  swp_aluRR 0x800052d0 _ _ 14 _ (sltuAluStep hlive (R 14) (R 15)) (alloc_code (by decide))
     (fun p hp => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
       rcases hp with rfl | rfl <;> exact ⟨by dsimp only; decide, by dsimp only; decide, rfl⟩)

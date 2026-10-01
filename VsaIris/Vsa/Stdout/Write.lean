@@ -1,36 +1,6 @@
 import VsaIris.Vsa.SymRunO
 import VsaIris.Interp.ITac
 import VsaIris.Vsa.BvLits
-import VsaIris.Vsa.Stdout.Steps.Part00
-import VsaIris.Vsa.Stdout.Steps.Part01
-import VsaIris.Vsa.Stdout.Steps.Part02
-import VsaIris.Vsa.Stdout.Steps.Part03
-import VsaIris.Vsa.Stdout.Steps.Part04
-import VsaIris.Vsa.Stdout.Steps.Part05
-import VsaIris.Vsa.Stdout.Steps.Part06
-import VsaIris.Vsa.Stdout.Steps.Part07
-import VsaIris.Vsa.Stdout.Steps.Part08
-import VsaIris.Vsa.Stdout.Steps.Part09
-import VsaIris.Vsa.Stdout.Steps.Part11
-import VsaIris.Vsa.Stdout.Steps.Part12
-import VsaIris.Vsa.Stdout.Steps.Part14
-import VsaIris.Vsa.Stdout.Steps.Part18
-import VsaIris.Vsa.Stdout.Steps.Part19
-import VsaIris.Vsa.Stdout.Steps.Part20
-import VsaIris.Vsa.Stdout.Steps.Part23
-import VsaIris.Vsa.Stdout.Steps.Part25
-import VsaIris.Vsa.Stdout.Steps.Part26
-import VsaIris.Vsa.Stdout.Steps.Part33
-import VsaIris.Vsa.Stdout.Steps.Part34
-import VsaIris.Vsa.Stdout.Steps.Part35
-import VsaIris.Vsa.Stdout.Steps.Part36
-import VsaIris.Vsa.Stdout.Steps.Part37
-import VsaIris.Vsa.Stdout.Steps.Part38
-import VsaIris.Vsa.Stdout.Steps.Part39
-import VsaIris.Vsa.Stdout.Steps.Part40
-import VsaIris.Vsa.Stdout.Steps.Part41
-import VsaIris.Vsa.Stdout.Steps.Part42
-import VsaIris.Vsa.Stdout.Steps.Part43
 
 namespace VsaIris.Sym
 
@@ -84,8 +54,8 @@ theorem write_putc (hl : ∀ p ∈ stdioText, live p.1) (b : BitVec 8) {t : Stri
     {R : Nat → BitVec 64} (h16 : R 16 = 0x8001b058#64) (h15 : R 15 = putcWord b)
     (hk : SWPO live (stdioText ++ dataOf Dt DA) iRegs S Q (t ++ putcStr b) 0x80000060#64 R Mt) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs S Q t 0x8000005c#64 R Mt :=
-  swp_putc putcSite putcSite_cert b (fun p hp => hl _ (stdio_code_8000005c p hp))
-    (fun p hp => List.mem_append_left _ (stdio_code_8000005c p hp))
+  swp_putc putcSite putcSite_cert b (fun p hp => hl _ ((stdio_code (by decide)) p hp))
+    (fun p hp => List.mem_append_left _ ((stdio_code (by decide)) p hp))
     (by decide) (by decide) (by decide) (by decide) (by decide) rfl h16 h15 hk
 
 abbrev writeCmd : BitVec 64 :=
@@ -119,7 +89,7 @@ theorem write_iter (hl : ∀ p ∈ stdioText, live p.1) (buf : Nat) (bs : List (
     rw [ea]; simp only [LdOK]; unfold tohostAddr at *; omega
   have cont : SWPO live (stdioText ++ dataOf Dt DA) iRegs S Q t 0x80000050#64
       (upd R 15 (zero_extend (m := 64) bs[j])) Mt := by
-    refine it_80000050 hl (it_80000054 hl (it_80000058 hl ?_))
+    refine (step% it 0x80000050) hl ((step% it 0x80000054) hl ((step% it 0x80000058) hl ?_))
     refine write_putc hl bs[j] (by simp [upd]; decide) ?_ ?_
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, reduceIte]
       rw [h14, write_word]
@@ -133,10 +103,10 @@ theorem write_iter (hl : ∀ p ∈ stdioText, live p.1) (buf : Nat) (bs : List (
       · subst e15; simp [h14, write_word]
       simp [e16, e11, e15]
   rcases hsrc j hj with ⟨hS, himg⟩ | ⟨hD, himg⟩
-  · refine it_8000004c hl hea (fun b hb => ?_) ?_
+  · refine (step% it 0x8000004c) hl hea (fun b hb => ?_) ?_
     · rw [ea] at hb; rw [(of_mem_accAddrs hb) |> fun h => show b = buf + j by omega]; exact hS
     · rw [ea, ldv_lbu, himg]; exact cont
-  · refine itD_8000004c hl hea (fun b hb => ?_) ?_
+  · refine (step% itD 0x8000004c) hl hea (fun b hb => ?_) ?_
     · rw [ea] at hb; rw [(of_mem_accAddrs hb) |> fun h => show b = buf + j by omega]; exact hD
     · rw [ea, ldv_lbu, himg]; exact cont
 
@@ -160,7 +130,7 @@ theorem write_loop (hl : ∀ p ∈ stdioText, live p.1) (buf : Nat) (bs : List (
   | zero =>
     intro j R t hjk h11 h13 h14 hk
     have hj : j < bs.length := by omega
-    refine write_iter hl buf bs hlo hhi hht hsrc j hj R t h11 h14 (it_80000060 hl ?_ ?_)
+    refine write_iter hl buf bs hlo hhi hht hsrc j hj R t h11 h14 ((step% it 0x80000060) hl ?_ ?_)
     · intro hc; exfalso; apply hc
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
       rw [h13]; congr 1; omega
@@ -175,7 +145,7 @@ theorem write_loop (hl : ∀ p ∈ stdioText, live p.1) (buf : Nat) (bs : List (
   | succ k ih =>
     intro j R t hjk h11 h13 h14 hk
     have hj : j < bs.length := by omega
-    refine write_iter hl buf bs hlo hhi hht hsrc j hj R t h11 h14 (it_80000060 hl ?_ ?_)
+    refine write_iter hl buf bs hlo hhi hht hsrc j hj R t h11 h14 ((step% it 0x80000060) hl ?_ ?_)
     · intro _
       refine ih (j + 1) _ _ (by omega) (by simp [upd_apply, Nat.add_assoc]) (by simp [upd_apply, h13])
         (by simp [upd_apply, h14]) fun R' h11' h16' hkeep => ?_
@@ -199,14 +169,14 @@ theorem write_run (hl : ∀ p ∈ stdioText, live p.1) (buf : Nat) (bs : List (B
     (hk : ∀ R' : Nat → BitVec 64, WriteOut R R' →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs S Q (t ++ putcs bs) (R 1) R' Mt) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs S Q t 0x8000003c#64 R Mt := by
-  refine it_8000003c hl (fun h0 => ?_) (fun h0 => ?_)
+  refine (step% it 0x8000003c) hl (fun h0 => ?_) (fun h0 => ?_)
   ·
     have hn : bs.length = 0 := by
       have := congrArg BitVec.toNat (h12.symm.trans h0)
       rw [toNat_ofNat_lt (by omega)] at this; simpa using this
     have e : bs = [] := List.eq_nil_of_length_eq_zero hn
     subst e
-    refine it_80000064 hl (it_80000068 hl (by simpa [upd_apply] using hal) ?_)
+    refine (step% it 0x80000064) hl ((step% it 0x80000068) hl (by simpa [upd_apply] using hal) ?_)
     simp only [putcs_nil, String.append_empty] at hk
     refine swp_congr (R' := upd R 10 (R 12 + sign_extend (m := 64) (0x000#12))) (fun x _ _ => rfl) ?_
     rw [show upd R 10 (R 12 + sign_extend (m := 64) (0x000#12)) 1 = R 1 by simp [upd_apply]]
@@ -217,7 +187,7 @@ theorem write_run (hl : ∀ p ∈ stdioText, live p.1) (buf : Nat) (bs : List (B
       rcases Nat.eq_zero_or_pos bs.length with h | h
       · exact absurd (by rw [h12, h]) h0
       · exact h
-    refine it_80000040 hl (it_80000044 hl (it_80000048 hl ?_))
+    refine (step% it 0x80000040) hl ((step% it 0x80000044) hl ((step% it 0x80000048) hl ?_))
     refine write_loop hl buf bs hlo hhi hht hsrc (bs.length - 1) 0 _ t (by omega)
       (by simp [upd_apply, h11]) ?_ rfl fun R' h11' h16' hkeep => ?_
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
@@ -225,7 +195,7 @@ theorem write_run (hl : ∀ p ∈ stdioText, live p.1) (buf : Nat) (bs : List (B
       apply BitVec.eq_of_toNat_eq
       simp [BitVec.toNat_add, BitVec.toNat_ofNat]; try omega
     · simp only [List.drop_zero] at hk ⊢
-      refine it_80000064 hl (it_80000068 hl ?_ ?_)
+      refine (step% it 0x80000064) hl ((step% it 0x80000068) hl ?_ ?_)
       · rw [upd_apply, if_neg (by decide), hkeep 1 (by decide) (by decide) (by decide)]
         simpa [upd_apply] using hal
       · have e1 : upd R' 10 (R' 12 + sign_extend (m := 64) (0x000#12)) 1 = R 1 := by

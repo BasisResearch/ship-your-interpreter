@@ -1,4 +1,5 @@
 import Vsa.Sim.SegEffect
+import Vsa.Sim.DivSpec3
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa
 open Vsa.Machine Vsa.Logic Vsa.MemRepr

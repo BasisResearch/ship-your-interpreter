@@ -1,4 +1,5 @@
 import VsaIris.Interp.ProofNativePrint
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -24,7 +25,7 @@ macro_rules
     have hsf : (s + 18446744073709551568#64).toNat = s.toNat - 48 := by
       rw [BitVec.toNat_add]; simp; omega
     unfold nativePrintlnPC
-    ix_run1 hlive using [h2, hsf] at 0x80002f90
+    sym_run1 hlive using [h2, hsf] at 0x80002f90
 
 #ix_seg npl_mid {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
@@ -33,14 +34,14 @@ macro_rules
     (hio2 : ldv .ld M 0x8001b548 = 0x8001bb20#64) :
     IW live impMem (accAddrs 0x8001b970 8) (nplS s) Q 0x80002f94#64 R M
   by
-    ix_run1 hlive using [hio1, hio2] at 0x80002fa0
+    sym_run1 hlive using [hio1, hio2] at 0x80002fa0
 
 #ix_seg npl_null {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} :
     IW live ∅ [] (nplF s) Q 0x80002fa4#64 R M
   by
-    ix_run1 hlive at 0x80002fa8
+    sym_run1 hlive at 0x80002fa8
 
 #ix_seg npl_epi {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
@@ -52,7 +53,7 @@ macro_rules
     (hs0 : ldv .ld M (s + 18446744073709551568#64 + 32#64).toNat = v8) :
     IW live ∅ [] (nplF s) Q 0x80002fac#64 R M
   by
-    ix_run1 hlive using [h2, hra, hs0, hal]
+    sym_run1 hlive using [h2, hra, hs0, hal]
 
 section Glue
 
@@ -180,7 +181,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       by rw [e48]; unfold Vsa.Sim.LayoutInstance.stackSL; simp; omega, by rw [e48]; omega,
       by rw [e48]; have := c.hs4; omega⟩
   iapply ms_callOut Wp (i := 0x80002fa0)
-    (jalx_80002fa0 live (fun p hp => c.hlive _ (interp_code_80002fa0 p hp))) interp_code_80002fa0
+    ((step% jalx 0x80002fa0) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (R := upd (upd (upd R 15 2147595576#64) 10 10#64) 11 2147597088#64)
     (S := nplF s) (Mt := M1) (n := nativePrintNeed)
     (fun cs => VsaIris.Sym.fputc_out live Wp (10#8) (s + 18446744073709551568#64) cs (o ++ printArgs st vs) hcl
@@ -215,7 +216,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   ihave #Hvn := valueNull_spec c.hlive Wp N sret
   unfold valueNullSpec
   iapply ms_callHelper Wp (i := 0x80002fa8)
-    (jalx_80002fa8 live (fun p hp => c.hlive _ (interp_code_80002fa8 p hp))) interp_code_80002fa8
+    ((step% jalx 0x80002fa8) live (fun p hp => c.hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide) (clob := []) (pins := fun rv => rv 10 = sret)
     (Pre := iprop(slot24 sret.toNat ∗ ⌜SlotGeom sret⌝)) (Post := fun _ => valAt N sret.toNat .null)
     (R := upd (upd R4 1 (BitVec.ofNat 64 (0x80002fa0 + 4))) 10
@@ -350,7 +351,7 @@ theorem nativePrintln_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeL
     (s + 18446744073709551568#64) vs st o
   unfold nativePrintSpec
   iapply ms_callHelper Wp (i := 0x80002f90)
-    (jalx_80002f90 live (fun p hp => hlive _ (interp_code_80002f90 p hp))) interp_code_80002f90
+    ((step% jalx 0x80002f90) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
     (by decide)
     (R := upd (upd (upd (upd rv 1 r) 2 (s + 18446744073709551568#64)) 8 (rv 10)) 10
       (s + 18446744073709551568#64)) (clob := callerSaved)

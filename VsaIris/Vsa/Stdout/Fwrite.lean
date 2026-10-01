@@ -1,8 +1,9 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Stdout.Sfvwrite
 
 namespace VsaIris.Sym
 
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
 
@@ -23,7 +24,7 @@ macro "#fwrite_seg " n:ident fl:term : command => `(
       (hbo : ∀ i, i < bs.length → ¬ outS s need (buf + i))
       (hsrc : ∀ i (h : i < bs.length), buf + i ∈ accAddrs 0x8001b970 8 ++ DAs ∧ imgM Dt (buf + i) = bs[i]) :
       SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DAs)) iRegs (outS s need) Q t 0x80005260#64 R Mt
-    by nx_run hlive using [h1, h10, h11, h12, h13, h2, hImp, BitVec.zero_add, BitVec.add_assoc] at 2147504304)
+    by nx_win s 512 0; nx_run hlive using [h1, h10, h11, h12, h13, h2, hImp, BitVec.zero_add, BitVec.add_assoc] at 2147504304)
 
 set_option hygiene false in
 

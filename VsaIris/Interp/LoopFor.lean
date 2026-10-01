@@ -1,4 +1,5 @@
 import VsaIris.Interp.LoopWhile
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -14,13 +15,13 @@ abbrev forView (a : Nat) : List Nat := accAddrs (a + 8) 32
     (hx3 : aS.toNat + 40 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aS.toNat)
     (h8 : R 8 = aS) (hi : ldv .ld m (aS + 8#64).toNat = pI) :
     IW live m (forView aS.toNat) (execS s) Q 0x8000423c#64 R Mt
-  by ix_run hlive using [h8, hi] at 0x80004254 0x8000426c
+  by sym_run hlive using [h8, hi] at 0x80004254 0x8000426c
 
 #ix_seg ForLoop_runInitJoin {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} :
     IW live m [] (execS s) Q 0x80004258#64 R Mt
-  by ix_run hlive at 0x8000426c
+  by sym_run hlive at 0x8000426c
 
 #ix_seg ForLoop_runHead {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -30,7 +31,7 @@ abbrev forView (a : Nat) : List Nat := accAddrs (a + 8) 32
     (h8 : R 8 = aS) (h2 : R 2 = s + 18446744073709551440#64)
     (hc : ldv .ld m (aS + 16#64).toNat = pC) :
     IW live m (forView aS.toNat) (execS s) Q 0x8000426c#64 R Mt
-  by ix_run hlive using [h8, h2, hc] at 0x80004280 0x800042a8
+  by sym_run hlive using [h8, h2, hc] at 0x80004280 0x800042a8
 
 #ix_seg ForLoop_runCopy {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -39,13 +40,13 @@ abbrev forView (a : Nat) : List Nat := accAddrs (a + 8) 32
     (hs : 0x87800000 + 176 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
     (h2 : R 2 = s + 18446744073709551440#64) :
     IW live m [] (execS s) Q 0x80004284#64 R Mt
-  by ix_run hlive using [h2, hsf] at 0x800042a0
+  by sym_run hlive using [h2, hsf] at 0x800042a0
 
 #ix_seg ForLoop_runBranch {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} :
     IW live m [] (execS s) Q 0x800042a4#64 R Mt
-  by ix_run hlive at 0x800042a8 0x8000409c
+  by sym_run hlive at 0x800042a8 0x8000409c
 
 #ix_seg ForLoop_runBody {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -54,13 +55,13 @@ abbrev forView (a : Nat) : List Nat := accAddrs (a + 8) 32
     (hx3 : aS.toNat + 40 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aS.toNat)
     (h8 : R 8 = aS) (hb : ldv .ld m (aS + 32#64).toNat = pB) :
     IW live m (forView aS.toNat) (execS s) Q 0x800042a8#64 R Mt
-  by ix_run hlive using [h8, hb] at 0x800042b8
+  by sym_run hlive using [h8, hb] at 0x800042b8
 
 #ix_seg ForLoop_runRoute {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} :
     IW live m [] (execS s) Q 0x800042bc#64 R Mt
-  by ix_run hlive at 0x8000409c 0x80004150 0x80004264
+  by sym_run hlive at 0x8000409c 0x80004150 0x80004264
 
 #ix_seg ForLoop_runStep {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -70,13 +71,13 @@ abbrev forView (a : Nat) : List Nat := accAddrs (a + 8) 32
     (h8 : R 8 = aS) (h2 : R 2 = s + 18446744073709551440#64)
     (he : ldv .ld m (aS + 24#64).toNat = pE) :
     IW live m (forView aS.toNat) (execS s) Q 0x80004264#64 R Mt
-  by ix_run hlive using [h8, h2, he] at 0x800042e8 0x8000426c
+  by sym_run hlive using [h8, h2, he] at 0x800042e8 0x8000426c
 
 #ix_seg ForLoop_runStepJoin {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} :
     IW live m [] (execS s) Q 0x800042ec#64 R Mt
-  by ix_run hlive at 0x8000426c
+  by sym_run hlive at 0x8000426c
 
 def OptS (m : Mem) (P : Nat → Prop) (p : Nat) : Option Stmt → Prop
   | none => p = 0
@@ -354,8 +355,8 @@ theorem forCopy (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ inte
     rw [← ldv_ld_imgW, hMt3]; ix_fwd using [hoff]
   ihave Ht := htr $$ %(s + 18446744073709551440#64 + 16#64) %v
   iapply ms_truthyCall Wp (N := N) (R := R3) (Mt := Mt3) (v := v) (i := 0x800042a0)
-    (jalx_800042a0 live (fun p hp => hlive _ (interp_code_800042a0 p hp)))
-    interp_code_800042a0 (by decide) (execSlot_in hs16 (by omega)) (by rw [hR3]; ix_reg) hs16.geo
+    ((step% jalx 0x800042a0) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (execSlot_in hs16 (by omega)) (by rw [hR3]; ix_reg) hs16.geo
   iframe Ht Hcode Hms
   isplitl []
   · imodintro; unfold valImg; rw [e0, e8, e16]; iexact Hv
@@ -591,8 +592,8 @@ theorem forCondEvalT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   iintro %R1 %aC %⟨hregs, hk1⟩ #Hac Hms
   ihave Hc := hc
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80004280)
-    (jalx_80004280 live (fun p hp => hlive _ (interp_code_80004280 p hp)))
-    interp_code_80004280 (by decide) Dc (k := k) (hsg.narrow hfit) hfit hsg.le
+    ((step% jalx 0x80004280) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) Dc (k := k) (hsg.narrow hfit) hfit hsg.le
     (execSlot hfg (o := 104) (by omega) rfl).geo hcb
   iframe Hc Hcode Hac Hfr Hms Hst Hw
   isplitl []
@@ -657,8 +658,8 @@ theorem execStepT_some (hlive : ∀ p ∈ interpText, live p.1)
   iintro %R1 %aE %⟨hregs, hk1⟩ #Hae Hms
   ihave He := he
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800042e8)
-    (jalx_800042e8 live (fun p hp => hlive _ (interp_code_800042e8 p hp)))
-    interp_code_800042e8 (by decide) De (k := k) (hsg.narrow hfit) hfit hsg.le hs16.geo heb
+    ((step% jalx 0x800042e8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) De (k := k) (hsg.narrow hfit) hfit hsg.le hs16.geo heb
   iframe He Hcode Hae Hfr Hms Hst Hw
   isplitl []
   · ipureintro; exact ⟨hregs, execSlot_in hs16 (by omega)⟩
@@ -691,8 +692,8 @@ theorem execInitT_some (hlive : ∀ p ∈ interpText, live p.1)
   iintro %R1 %aI %⟨hregs, hk1, h19⟩ #Hai Hms
   ihave Hi := hi
   iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80004254)
-    (jalx_80004254 live (fun p hp => hlive _ (interp_code_80004254 p hp)))
-    interp_code_80004254 (by decide) Di (k := k) (hsg.narrow hfit) hfit hsg.le hslg hib
+    ((step% jalx 0x80004254) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) Di (k := k) (hsg.narrow hfit) hfit hsg.le hslg hib
   iframe Hi Hcode Hai Hfr Hms Hst Hslot Hw
   isplitl []
   · ipureintro; exact hregs
@@ -729,8 +730,8 @@ theorem forBodyT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   iintro %R1 %aB %⟨hregs, hk1⟩ #Hab Hms
   ihave Hb := hb
   iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800042b8)
-    (jalx_800042b8 live (fun p hp => hlive _ (interp_code_800042b8 p hp)))
-    interp_code_800042b8 (by decide) Db (k := k) (hsg.narrow hfit) hfit hsg.le hslg hbb
+    ((step% jalx 0x800042b8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) Db (k := k) (hsg.narrow hfit) hfit hsg.le hslg hbb
   iframe Hb Hcode Hab Hfr Hms Hst Hslot Hw
   isplitl []
   · ipureintro; exact hregs
@@ -868,8 +869,8 @@ theorem forCondEvalP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
   iintro %R1 %aC %⟨hregs, hk1⟩ #Hac Hms
   ihave Hc := evalSpecsP_at (N := N) (L := L) (Room := Room) (inp := inp) Core st d env c $$ HE
   iapply ms_callEvalPx (N := N) (L := L) (Room := Room) (inp := inp) (X := iprop(emp)) (Kret := K)
-    (i := 0x80004280) (jalx_80004280 live (fun p hp => hlive _ (interp_code_80004280 p hp)))
-    interp_code_80004280 (by decide) (hsg.narrow hfit) hfit hsg.le
+    (i := 0x80004280) ((step% jalx 0x80004280) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (hsg.narrow hfit) hfit hsg.le
     (execSlot hfg (o := 104) (by omega) rfl).geo hcb
   iframe Hc Hcode Hac Hfr Hms Hst Hw HK
   isplitl []
@@ -910,8 +911,8 @@ theorem forBodyP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
   iintro %R1 %aB %⟨hregs, hk1⟩ #Hab Hms
   ihave Hb := execSpecsP_at (N := N) (L := L) (Room := Room) (inp := inp) Core st d env b $$ HS
   iapply ms_callExecPx (N := N) (L := L) (Room := Room) (inp := inp) (Kret := K) (X := X)
-    (i := 0x800042b8) (jalx_800042b8 live (fun p hp => hlive _ (interp_code_800042b8 p hp)))
-    interp_code_800042b8 (by decide) (hsg.narrow hfit) hfit hsg.le hslg hbb
+    (i := 0x800042b8) ((step% jalx 0x800042b8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (hsg.narrow hfit) hfit hsg.le hslg hbb
   iframe Hb HX Hcode Hab Hfr Hms Hst Hslot Hw HK
   isplitl []
   · ipureintro; exact hregs
@@ -956,8 +957,8 @@ theorem forStepP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     iintro %R1 %aE %⟨hregs, hk1⟩ #Hae Hms
     ihave He := evalSpecsP_at (N := N) (L := L) (Room := Room) (inp := inp) Core st d env e $$ HE
     iapply ms_callEvalPx (N := N) (L := L) (Room := Room) (inp := inp) (X := iprop(emp)) (Kret := K)
-      (i := 0x800042e8) (jalx_800042e8 live (fun p hp => hlive _ (interp_code_800042e8 p hp)))
-      interp_code_800042e8 (by decide) (hsg.narrow hfit) hfit hsg.le hs16.geo heb
+      (i := 0x800042e8) ((step% jalx 0x800042e8) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+      (interp_code (by decide)) (by decide) (hsg.narrow hfit) hfit hsg.le hs16.geo heb
     iframe He Hcode Hae Hfr Hms Hst Hw HK
     isplitl []
     · ipureintro; exact ⟨hregs, execSlot_in hs16 (by omega)⟩
@@ -1191,8 +1192,8 @@ theorem execInitP_all (hlive : ∀ p ∈ interpText, live p.1) (Core : IProp GF)
         ms 0x8000426c#64 R' (execS s) Mt -∗
         stackScratch (s + 18446744073709551440#64) m' -∗ slot24 aRet.toNat -∗
         world N L Room inp .uncounted st' d -∗ (wpW (vsaModel live)).W Φ))
-      (i := 0x80004254) (jalx_80004254 live (fun p hp => hlive _ (interp_code_80004254 p hp)))
-      interp_code_80004254 (by decide) (hsg.narrow hfit) hfit hsg.le hslg hib
+      (i := 0x80004254) ((step% jalx 0x80004254) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+      (interp_code (by decide)) (by decide) (hsg.narrow hfit) hfit hsg.le hslg hib
     iframe Hi Hcode Hai Hfr Hms Hst Hslot Hw HK
     isplitl []
     · ipureintro; exact hregs

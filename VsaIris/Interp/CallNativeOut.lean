@@ -183,8 +183,8 @@ end Defs
   ihave #Hsp := Hspec $$ %sret %(s + 18446744073709550528#64 + 240#64)
     %(s + 18446744073709550528#64) %vs %st2.store %st2.out
   iapply ms_callNatOut N Wp (i := 0x800039f4)
-    (jalrx_800039f4 live (fun p hp => hlive _ (interp_code_800039f4 p hp)) entry hent4)
-    interp_code_800039f4 (by decide) (need := need) (sret := sret)
+    (jalrx_800039f4 live (fun p hp => hlive _ ((interp_code (by decide)) p hp)) entry hent4)
+    (interp_code (by decide)) (by decide) (need := need) (sret := sret)
     (args := s + 18446744073709550528#64 + 240#64) (sp := s + 18446744073709550528#64) (vs := vs)
     (st := st2.store) (o := st2.out) (o' := out st2.store vs st2.out)
     (R := R1) (by subst hR1; ix_reg; exact hw2')

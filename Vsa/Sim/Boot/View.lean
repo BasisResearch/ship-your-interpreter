@@ -14,21 +14,6 @@ def readLEv (v : Nat → Option (BitVec 8)) (a : Nat) : Nat → Option Nat
     let rest ← readLEv v (a + 1) k
     pure (b.toNat + 256 * rest)
 
-theorem ViewOf.readLE {m : Mem} {v : Nat → Option (BitVec 8)} (h : ViewOf m v) (a n : Nat) :
-    Vsa.MemRepr.readLE m a n = readLEv v a n := by
-  induction n generalizing a with
-  | zero => rfl
-  | succ n ih => simp only [Vsa.MemRepr.readLE, readLEv, h a, ih]
-
-theorem ViewOf.read64 {m : Mem} {v : Nat → Option (BitVec 8)} (h : ViewOf m v) (a : Nat) :
-    Vsa.MemRepr.read64 m a = readLEv v a 8 := h.readLE a 8
-
-theorem ViewOf.read32 {m : Mem} {v : Nat → Option (BitVec 8)} (h : ViewOf m v) (a : Nat) :
-    Vsa.MemRepr.read32 m a = readLEv v a 4 := h.readLE a 4
-
-theorem isSome_exists {α : Type} {o : Option α} (h : o.isSome = true) : ∃ b, o = some b :=
-  Option.isSome_iff_exists.mp h
-
 theorem bootMem_view {script : Nat} {L : PackedLog} {t : RunTree} (h : LogOk L t) :
     ViewOf (bootMem script L) (bootView script t) :=
   bootMem_get h

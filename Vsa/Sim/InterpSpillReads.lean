@@ -1,4 +1,4 @@
-import Vsa.Sim.BridgeSegFramed
+import Vsa.Sim.BridgeSeg
 
 open Vsa.MemRepr LeanRV64DExecutable LeanRV64DExecutable.Functions
 

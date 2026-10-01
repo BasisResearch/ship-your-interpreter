@@ -4,6 +4,7 @@ import VsaIris.Interp.SpecErr
 import VsaIris.Vsa.TopAbrupt
 import VsaIris.Interp.ProofValueCons
 import VsaIris.Interp.LeafErr
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -15,26 +16,26 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     (h2 : R 2 = sFr) (hin : ldv .ld Mt (sTop.toNat - 176) = BitVec.ofNat 64 inpTop)
     (hline : LdOK (R 9 + 4#64).toNat 4) :
     IW live m [] (interpS sTop) Q 0x80004540#64 R Mt
-  by ix_run hlive using [h2, hin, hline, interpS, sFr_toNat] at 0x80004558
+  by sym_run hlive using [h2, hin, hline, interpS, sFr_toNat] at 0x80004558
 
 #ix_seg TopAbrBrk_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     (h2 : R 2 = sFr) (hin : ldv .ld Mt (sTop.toNat - 176) = BitVec.ofNat 64 inpTop)
     (hline : LdOK (R 9 + 4#64).toNat 4) :
     IW live m [] (interpS sTop) Q 0x80004564#64 R Mt
-  by ix_run hlive using [h2, hin, hline, interpS, sFr_toNat] at 0x8000457c
+  by sym_run hlive using [h2, hin, hline, interpS, sFr_toNat] at 0x8000457c
 
 #ix_seg TopTlRet_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     (h2 : R 2 = sFr) (hRA : ldv .ld Mt (sFr + 168#64).toNat = 0x800045ec#64) :
     IW live m [] (interpS sTop) Q 0x8000455c#64 R Mt
-  by ix_run hlive using [h2, hRA, interpS]
+  by sym_run hlive using [h2, hRA, interpS]
 
 #ix_seg TopTlBrk_run {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     (h2 : R 2 = sFr) (hRA : ldv .ld Mt (sFr + 168#64).toNat = 0x800045ec#64) :
     IW live m [] (interpS sTop) Q 0x80004580#64 R Mt
-  by ix_run hlive using [h2, hRA, interpS]
+  by sym_run hlive using [h2, hRA, interpS]
 
 section Abrupt
 
@@ -75,7 +76,7 @@ theorem topRet_runs (hlive : ∀ p ∈ interpText, live p.1) : TopRuns live topR
       simp only [upd_apply, h1, h2, h3, h4, h5, ite_false]))
   tail h2 hra k := TopTlRet_run hlive h2 hra (k _ (by ix_reg) (by ix_reg) (by ix_reg; decide)
     (by ix_reg))
-  code := interp_code_80004558
+  code := (interp_code (by decide))
 
 theorem topBrk_runs (hlive : ∀ p ∈ interpText, live p.1) : TopRuns live topBrk where
   stage h2 hin hl k := TopAbrBrk_run hlive h2 hin hl (fun v => k _ (by ix_reg; exact h2) (by ix_reg)
@@ -84,7 +85,7 @@ theorem topBrk_runs (hlive : ∀ p ∈ interpText, live p.1) : TopRuns live topB
       simp only [upd_apply, h1, h2, h3, h4, h5, ite_false]))
   tail h2 hra k := TopTlBrk_run hlive h2 hra (k _ (by ix_reg) (by ix_reg) (by ix_reg; decide)
     (by ix_reg))
-  code := interp_code_8000457c
+  code := (interp_code (by decide))
 
 theorem ldOK_of_readOK {q : BitVec 64} (h : ReadOK q.toNat) : LdOK (q + 4#64).toNat 4 := by
   have h1 := h.lo; have h2 := h.win.1; have h3 := h.win.2
@@ -295,6 +296,7 @@ theorem wp_abortCodes (N : Vsa.RuntimeRepr.NativeAddrs) (L : DlLayout) (Room : R
     iframe Hl Hscr Hjb0 HI HT Hgp Himg
   · iapply wp_abortOom H live hlive Wp (fun o => hΦ 1 o (Or.inr rfl)) (sM - 176#64) n
     iframe Ho Hscr Hgp Himg
+
 
 theorem wp_topAbort (H : NewlibHoles) (hcl : CodeLive live) (Wp : MachWP (GF := GF) (vsaModel live))
     {Φ : Nat × String → IProp GF} (hΦe : ∀ e o, AbortCode e → ⊢ Φ (e, o)) {Core : IProp GF}

@@ -78,6 +78,24 @@ files, are not in this repository.
 | `Vsa.lean`, `VsaIris.lean`, `VsaBoot.lean` | library roots importing the modules above |
 | `VsaRun.lean`, `WhileC.lean`, `WhileCheck.lean` | the executables |
 
+## Proof structure
+
+The machine-code proof is organised around a few abstractions, each proved once:
+
+| Abstraction | Where | Replaces |
+| --- | --- | --- |
+| `#simp_nf`, `decodeW` | `Vsa/Meta/SimpNF.lean`, `Vsa/Sim/DecodeNF.lean` | per-word decode lemmas: the Sail decoder is simplified once, and each decode fact is one `rfl` |
+| `TextPiece` | `Vsa/Sim/TextImage.lean` | per-address code-byte lemmas: code residency is a range of the ELF image |
+| `StepRules`, `StepGen.driverLemma?` | `VsaIris/Vsa/StepRules.lean`, `StepGen.lean` | per-address step lemmas: one rule per instruction class; a step lemma is built on demand from the image |
+| `SymExec`, `sym_run` | `VsaIris/Vsa/SymExec.lean`, `VsaIris/Interp/SymInterp.lean` | stepping in interpreter machine runs: a symbolic executor proved sound once |
+| `Region`, `HeapPermit`, `Win` | `VsaIris/Vsa/` | address, frame and heap-edit reasoning in allocator and newlib paths |
+| `boot_witness` | `Vsa/Sim/Boot/` | per-program boot data: derived data is computed, and the kernel checks every value |
+| descriptor and mode arms | `VsaIris/Interp/ArmCore.lean`, `ArmEval.lean` | total/partial twins and sibling operators among the big-step rules |
+| `Vsa/Lang`, `VsaIris/Lang` | | the refinement argument, shared by any interpreter proved on this machine |
+
+`abstractions/ROUND-*.md` records how each layer was chosen and measured.
+[`docs/PORTING.md`](docs/PORTING.md) explains how another interpreter on this machine layer uses them.
+
 ## Building
 
 ```sh

@@ -1,7 +1,5 @@
 import VsaIris.Vsa.ExitH.RunIdle
 import VsaIris.Vsa.ExitH.RunWritten
-import VsaIris.Vsa.ExitH.RunIdleU
-import VsaIris.Vsa.ExitH.RunWrittenU
 import VsaIris.Vsa.Newlib
 
 namespace VsaIris.Newlib.ExitH
@@ -9,15 +7,8 @@ namespace VsaIris.Newlib.ExitH
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open Vsa.Sim Vsa.MemRepr VsaIris.Inst VsaIris.Interp VsaIris.Stdio VsaIris.Sym VsaIris.MallocFast
 
-theorem stdioText_img :
-    stdioText.all (fun p => decide (textDom p.1) && textByte p.1 == p.2) = true := by
-  decide +kernel
-
-theorem stdioText_mem : ∀ p ∈ stdioText, textDom p.1 ∧ textByte p.1 = p.2 := by
-  intro p hp
-  have h := List.all_eq_true.1 stdioText_img p hp
-  simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
-  exact h
+theorem stdioText_mem : ∀ p ∈ stdioText, textDom p.1 ∧ textByte p.1 = p.2 :=
+  VsaIris.Sym.stdioText_img_mem
 
 theorem stdioText_live {live : Nat → Prop} (h : CodeLive live) : ∀ p ∈ stdioText, live p.1 :=
   fun p hp => h _ (stdioText_mem p hp).1
@@ -62,11 +53,9 @@ theorem exit_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {
       ⟨hm.pc, (hm.regs 2 (by decide) (by decide)).trans hend.sp,
         (hm.regs 8 (by decide) (by decide)).trans hend.s0,
         fun x hx => (hm.regs x (hin x hx).1 (hin x hx).2).trans ((hend.saved x hx).trans (hsv x hx))⟩
-  cases o <;> rcases hE with hE | hE
-  · exact exitIdleU_chain hlive hs h2 h8 h11 hC hE hk
-  · exact exitWrittenU_chain hlive hs h2 h8 h11 hC hE hk
-  · exact exitIdle_chain hlive hs h2 h8 h11 hC hE hk
-  · exact exitWritten_chain hlive hs h2 h8 h11 hC hE hk
+  rcases hE with hE | hE
+  · exact exitIdle_chain hlive hs h2 h8 h11 (conFlags_of o) hC hE hk
+  · exact exitWritten_chain hlive hs h2 h8 h11 (conFlags_of o) hC hE hk
 
 open Classical in
 

@@ -1,8 +1,10 @@
 import VsaIris.Vsa.SnpPuts
+import VsaIris.Vsa.SnpWin
 
 namespace VsaIris.Sym
 
 open Vsa.MemRepr Vsa.Sim VsaIris.MallocFast
+open scoped VsaIris.Sym.Win
 
 abbrev snpFP (s : Nat) : Nat := s - 264
 
@@ -27,6 +29,10 @@ structure SnpGeom (s dst n : Nat) : Prop where
   d_lo : 0x8001c168 ≤ dst
   d_hi : dst + n ≤ 0x100000000
   d_sep : dst + n ≤ s - 1024 ∨ s ≤ dst
+
+/-- The snprintf stack window of the geometry. -/
+theorem SnpGeom.win {s dst n : Nat} (G : SnpGeom s dst n) : Win (snpS s dst n) s 1024 0 :=
+  Win.of_snpS ⟨Nat.le_refl _, G.s_lo, G.s_hi, by have := G.s_al; omega⟩
 
 structure PieceGeom (s dst n b l : Nat) : Prop where
   lo : 0x80000000 ≤ b
@@ -703,7 +709,7 @@ theorem ssprint_nw {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
     simp (disch := omega) only [toNat_ofNat_lt]
     refine nw_gen (fun M => PrintSlots M s R ∧ ∀ a, (a < s - 928 ∨ s - 864 ≤ a) → imgM M a = imgM Mt a)
       ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, fun a ha => by simp (disch := omega) only [imgM_store_miss]⟩ ?_
-    any_goals simp (disch := first | omega | (simp only [widthOfM]; omega)) only [ldv_store_miss, ldv_ld_hit_eq]
+    any_goals simp (disch := first | win_key | omega | (simp only [widthOfM]; omega)) only [ldv_store_miss, ldv_ld_hit_eq]
     rintro Mc ⟨hsl, hagr⟩
     have hiov0 : IovAt Mc s L := hiov.transport hL8 fun a h1 h2 => hagr a (by simp only [snpIov] at h1 h2; omega)
     have hP0 : PiecesOK Dt DA Mc s dst n g L := by

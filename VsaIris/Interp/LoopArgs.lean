@@ -1,4 +1,5 @@
 import VsaIris.Interp.LoopKit
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -21,7 +22,7 @@ abbrev argsView (a arr argc : Nat) : List Nat := accAddrs (a + 16) 8 ++ accAddrs
     (harr : ldv .ld m (aX + 16#64).toNat = arr)
     (hel : ldv .ld m (arr + BitVec.ofNat 64 idx <<< 3).toNat = pA) :
     IW live m (argsView aX.toNat arr.toNat argc) (InExt (s.toNat - 1088, 1088)) Q 0x800031dc#64 R Mt
-  by ix_run hlive using [h8, h16, h2, harr, hel, hsf] at 0x80003220
+  by sym_run hlive using [h8, h16, h2, harr, hel, hsf] at 0x80003220
 
 #ix_seg ArgsLoop_runB {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -35,7 +36,7 @@ abbrev argsView (a arr argc : Nat) : List Nat := accAddrs (a + 16) 8 ++ accAddrs
     (hq16 : (slotA + LeanRV64DExecutable.Functions.sign_extend 3344#12).toNat = q + 16)
     (hq1 : s.toNat - 1088 + 240 ≤ q) (hq2 : q + 24 ≤ s.toNat - 1088 + 1008) (hq3 : q % 8 = 0) :
     IW live m [] (InExt (s.toNat - 1088, 1088)) Q 0x80003224#64 R Mt
-  by ix_run hlive using [h2, hA, hsf, hq0, hq8, hq16] at 0x800031dc 0x80003254
+  by sym_run hlive using [h2, hA, hsf, hq0, hq8, hq16] at 0x800031dc 0x80003254
 
 theorem exprArray_get {m : Mem} {P : Nat → Prop} :
     ∀ {a n : Nat} {es : List Expr}, ExprArrayReprWithin m P a n es →
@@ -519,8 +520,8 @@ theorem evalArgsT_cons (hlive : ∀ p ∈ interpText, live p.1)
   iintro %R1 %Mt1 %aA %⟨hregs, hk1, hsp1, hut1, hlo1⟩ #Hae Hms
   ihave He := he
   iapply ms_callEvalT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x80003220)
-    (jalx_80003220 live (fun p hp => hlive _ (interp_code_80003220 p hp)))
-    interp_code_80003220 (by decide) De (k := k + nes) (hsg.narrow hneed) hneed hsg.le hsl.2 hbb
+    ((step% jalx 0x80003220) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) De (k := k + nes) (hsg.narrow hneed) hneed hsg.le hsl.2 hbb
   iframe He Hcode Hae Hfr Hms Hst Hw
   isplitl []
   · ipureintro
@@ -587,8 +588,8 @@ theorem evalArgsP_all (hlive : ∀ p ∈ interpText, live p.1) (Core : IProp GF)
         argVals N (imgM Mt') (argsBase s) 0 (pre ++ vs) -∗
         stackScratch (s + 18446744073709550528#64) m' -∗
         world N L Room inp .uncounted st' d -∗ Out -∗ (wpW (vsaModel live)).W Φ))
-      (jalx_80003220 live (fun p hp => hlive _ (interp_code_80003220 p hp)))
-      interp_code_80003220 (by decide) hOut (hsg.narrow hneed) hneed hsg.le hn0 (by omega)
+      ((step% jalx 0x80003220) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+      (interp_code (by decide)) (by decide) hOut (hsg.narrow hneed) hneed hsg.le hn0 (by omega)
       hsl.2 hbb
     iframe He Hcode Hae Hfr Hms Hst Hw HOut HK
     isplitl []

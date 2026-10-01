@@ -123,14 +123,14 @@ theorem envNew_spec (Wp : MachWP (GF := GF) (vsaModel live)) (hl : ∀ p ∈ env
   rw [← hR2, show envBytes = 32 from rfl]
   iapply wp_call_malloc A Wp (i := 0x80002a10) (R := R1)
     (show JalExec (vsaModel live) 0x80002a10 _ mallocEntryBV from
-      jalx_80002a10 live fun p hp => hl _ (env_code_80002a10 p hp))
+      (step% jalx 0x80002a10) live fun p hp => hl _ ((env_code (by decide)) p hp))
     (by decide) ρ H 32 (by rw [h10]; exact ⟨by decide, by decide⟩)
     ⟨by rw [hstk1.sp]; have := hsp.lo; unfold htifLo envNewNeed allocHeadroom at this;
         unfold Vsa.Sim.tohostAddr allocHeadroom; omega,
      by rw [hstk1.sp]; have := hsp.hi; omega,
      by rw [hstk1.sp]; have := hsp.align; omega⟩
   isplitl []
-  · iapply instrAt_of_text env_code_80002a10 $$ Ht
+  · iapply instrAt_of_text (env_code (by decide)) $$ Ht
   iframe Hat Hgp HR Hscr
   isplitl [Hpc]
   · iexact Hpc

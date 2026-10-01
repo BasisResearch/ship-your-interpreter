@@ -1,9 +1,10 @@
 import VsaIris.Vsa.Fprintf.Move
+import VsaIris.Vsa.Stdout.Win
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 #ix_seg sflushF_A {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {t : String} {Mt : Mem}
@@ -32,7 +33,9 @@ open scoped VsaIris.Sym.Stdout
     (hsw : ∀ B : BitVec 64, BitVec.signExtend 64 (BitVec.extractLsb 31 0 (B + BitVec.ofNat 64 bs.length) -
       BitVec.extractLsb 31 0 B) = BitVec.ofNat 64 bs.length) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000eb70#64 R Mt
-  by nx_run hlive using [h10, h11, h2, h1, h8, h9, h18, h19, hF, hBl, hP, hwr, hck, hsz, BitVec.reduceAnd,
+  by
+    nx_win sp 128 0; nx_win f 0 184
+    nx_run hlive using [h10, h11, h2, h1, h8, h9, h18, h19, hF, hBl, hP, hwr, hck, hsz, BitVec.reduceAnd,
     BitVec.reduceOr, BitVec.add_assoc, hsw, hti, BitVec.toInt_zero] at 2147544308
 
 #ix_piece sflushF_B from sflushF_A by
@@ -47,7 +50,7 @@ open scoped VsaIris.Sym.Stdout
     BitVec.setWidth_eq]; done)
   all_goals try nx_addr
   · intro i hi; have := hbd i hi; nx_addr
-  · repeat' (first | exact hsrc i hi | refine ByteSrc.store ?_ _ ?_)
+  · repeat' (first | refine ByteSrc.store ?_ _ ?_ | exact hsrc i hi)
     all_goals (have := hbd i hi; nx_addr)
   · nx_mem; exact hsfl
   · nx_mem; exact hsfd
@@ -91,7 +94,7 @@ theorem sflushF_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1
     (hk : ∀ R', RetOK R R' 0#64 → SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q
       (t ++ putcs bs) ra R' (sflushFMt Mt sp f B ra s0 s1 s2 s3)) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000eb70#64 R Mt := by
-  refine sflushF_chain hlive hs1 hs2 hs3 hs4 hal hra h1 h8 h9 h18 h19 hfa hf1 hf2 hn hn2 hB1 hb2 h10 h11 h2
+  nx_win sp 128 0; refine sflushF_chain hlive hs1 hs2 hs3 hs4 hal hra h1 h8 h9 h18 h19 hfa hf1 hf2 hn hn2 hB1 hb2 h10 h11 h2
     hF hBl hB0 hP hsz hwr hck hsfl hsfd hb3 hbd hsrc (toInt_ofNat_small (by omega))
     (subw_add_ofNat hn2) ?_
   intros
@@ -119,6 +122,7 @@ theorem sflushF_run0 {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.
     (hk : ∀ R', RetOK R R' 0#64 → SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q
       t ra R' (sflushF0Mt Mt sp f B ra s0 s1 s2 s3)) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000eb70#64 R Mt := by
+  nx_win sp 128 0; nx_win f 0 184
   nx_run hlive using [h10, h11, h2, h1, h8, h9, h18, h19, hF, hBl, hP, hsz, BitVec.reduceAnd,
     BitVec.reduceOr, BitVec.add_assoc, BitVec.sub_self, BitVec.toInt_zero]
   exact hk _ (retOK_of (by simp [upd_apply]) (by ret_keep))
@@ -166,6 +170,7 @@ structure FfCtx (s sp f B ra : BitVec 64) (need : Nat) (R : Nat → BitVec 64) (
   by
     have := C.hs1; have := C.hs2; have := C.hs3; have := C.hs4; have := C.hal; have := C.hfa
     have := C.hf1; have := C.hf2
+    nx_win sp 256 0; nx_win f 0 184
     nx_run hlive using [C.h1, C.h10, C.h11, C.h2, C.hsinit, C.hF, C.hlm, BitVec.reduceAnd, BitVec.reduceOr,
       BitVec.add_assoc] at 2147543920
 
@@ -179,7 +184,7 @@ structure FfCtx (s sp f B ra : BitVec 64) (need : Nat) (R : Nat → BitVec 64) (
   all_goals try ((try nx_norm); nx_mem; simp only [C.hF, C.hBl, hP, C.hsz, C.hwr, C.hck, C.hsfl, C.hsfd]; done)
   · intro i hi; have := hbd i hi; have := C.hs1; have := C.hs2; have := C.hf1; nx_addr
   · intro i hi
-    repeat' (first | exact hsrc i hi | refine ByteSrc.store ?_ _ ?_)
+    repeat' (first | refine ByteSrc.store ?_ _ ?_ | exact hsrc i hi)
     all_goals (have := hbd i hi; have := C.hs1; have := C.hs2; have := C.hf1; have := C.hf2; nx_addr)
 
 #ix_piece fflushF_C from fflushF_B by
@@ -229,6 +234,7 @@ theorem fflushF_run {live : Nat → Prop} (hlive : ∀ p ∈ stdioText, live p.1
   by
     have := C.hs1; have := C.hs2; have := C.hs3; have := C.hs4; have := C.hal; have := C.hfa
     have := C.hf1; have := C.hf2
+    nx_win sp 256 0; nx_win f 0 184
     nx_run hlive using [C.h1, C.h10, C.h11, C.h2, C.hsinit, C.hF, C.hlm, BitVec.reduceAnd, BitVec.reduceOr,
       BitVec.add_assoc] at 2147543920
 

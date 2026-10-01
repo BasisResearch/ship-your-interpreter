@@ -1,5 +1,6 @@
 import Vsa.Sim.EvalSimCommon
-import Vsa.Sim.DivSites2
+import Vsa.Sim.DecodeNF
+import Vsa.Sim.DivLoops
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register

@@ -2,12 +2,7 @@ import Vsa.Sim.DivLoops
 import Vsa.Sim.Code.«__umoddi3»
 import Vsa.Sim.Code.«__divdi3»
 import Vsa.Sim.Code.«__moddi3»
-import Vsa.Sim.DecodeTable.Batch15Part32
-import Vsa.Sim.DecodeTable.Batch15Part28
-import Vsa.Sim.DecodeTable.Batch08Part12
-import Vsa.Sim.DecodeTable.Batch01Part10
-import Vsa.Sim.DecodeTable.Batch01Part19
-import Vsa.Sim.DecodeTable.Batch01Part04
+import Vsa.Sim.DecodeNF
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
@@ -172,7 +167,7 @@ theorem site2_800046a4_taken
     (regidx.Regidx 0x0a#5) (regidx.Regidx 0x00#5) bop.BLT (0x06054063#32)
     (0x63#8) (0x40#8) (0x05#8) (0x06#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_06054063 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x06054063#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -195,7 +190,7 @@ theorem site2_800046a4_nottaken
     (regidx.Regidx 0x0a#5) (regidx.Regidx 0x00#5) bop.BLT (0x06054063#32)
     (0x63#8) (0x40#8) (0x05#8) (0x06#8)
     hG hpc hminstret (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_06054063 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x06054063#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -218,7 +213,7 @@ theorem site2_80004710
     (0x6f#8) (0xf0#8) (0xdf#8) (0xf9#8)
     hG hpc hminstret hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
     (by apply BitVec.eq_of_toNat_eq; decide) (by apply BitVec.eq_of_toNat_eq; decide)
-    (Vsa.Sim.DecodeTable.decode_f9dff06f (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0xf9dff06f#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))

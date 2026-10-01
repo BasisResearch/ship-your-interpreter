@@ -1,29 +1,5 @@
 import Vsa.Sim.ValueSites
-import Vsa.Sim.DivSites
 import Vsa.Sim.Code.Longjmp
-import Vsa.Sim.DecodeTable.Batch08Part25
-import Vsa.Sim.DecodeTable.Batch08Part17
-import Vsa.Sim.DecodeTable.Batch08Part14
-import Vsa.Sim.DecodeTable.Batch08Part12
-import Vsa.Sim.DecodeTable.Batch08Part09
-import Vsa.Sim.DecodeTable.Batch08Part08
-import Vsa.Sim.DecodeTable.Batch08Part07
-import Vsa.Sim.DecodeTable.Batch08Part05
-import Vsa.Sim.DecodeTable.Batch07Part32
-import Vsa.Sim.DecodeTable.Batch07Part26
-import Vsa.Sim.DecodeTable.Batch07Part19
-import Vsa.Sim.DecodeTable.Batch07Part16
-import Vsa.Sim.DecodeTable.Batch07Part15
-import Vsa.Sim.DecodeTable.Batch07Part14
-import Vsa.Sim.DecodeTable.Batch07Part13
-import Vsa.Sim.DecodeTable.Batch07Part09
-import Vsa.Sim.DecodeTable.Batch06Part31
-import Vsa.Sim.DecodeTable.Batch06Part21
-import Vsa.Sim.DecodeTable.Batch06Part04
-import Vsa.Sim.DecodeTable.Batch05Part24
-import Vsa.Sim.DecodeTable.Batch05Part15
-import Vsa.Sim.DecodeTable.Batch03Part28
-import Vsa.Sim.DecodeTable.Batch02Part23
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
@@ -70,13 +46,13 @@ theorem site_80007074_jmp
         (sigmaPost_alu σ pc vminstret Register.x10
           (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v11 (sign_extend (m := 64) (0x001#12)))))) := by
   subst hpcv
-  obtain ⟨hb0, hb1, hb2, hb3⟩ := longjmp_at_80007074 hmem
+  obtain ⟨hb0, hb1, hb2, hb3⟩ := Vsa.Sim.TextIn.pin4L hmem 0x80007074 0x80007075 0x80007076 0x80007077 (b0 := (0x13 : BitVec 8)) (b1 := (0xb5 : BitVec 8)) (b2 := (0x15 : BitVec 8)) (b3 := (0x00 : BitVec 8)) (by decide)
   exact stepObs_alu σ i u (0x80007074#64) vminstret (0x0015b513#32)
     (instruction.ITYPE (0x001#12, regidx.Regidx 0x0b#5, regidx.Regidx 0x0a#5, iop.SLTIU))
     Register.x10 (zero_extend (m := 64) (bool_to_bit (zopz0zI_u v11 (sign_extend (m := 64) (0x001#12)))))
     (0x13#8) (0xb5#8) (0x15#8) (0x00#8)
     hG hpc hminstret w_0015b513_jmp nr_0015b513_jmp
-    (Vsa.Sim.DecodeTable.decode_0015b513 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x0015b513#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))

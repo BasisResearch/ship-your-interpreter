@@ -106,4 +106,121 @@ theorem swp_forget_reg {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem} (k : 
 
 end SWP
 
+/-! ### One forgotten-stack layer -/
+
+/-- The forgotten bytes of two nested forgets over the same base. -/
+def mergeG (lo n' : Nat) (g' g : Nat → BitVec 8) : Nat → BitVec 8 :=
+  fun a => if a < lo + n' then g' a else g a
+
+theorem fillR_fillR_ge (M : Mem) {lo n n' : Nat} (g g' : Nat → BitVec 8) (h : n ≤ n') :
+    fillR (fillR M lo n g) lo n' g' = fillR M lo n' g' := by
+  apply Std.ExtHashMap.ext_getElem?
+  intro k
+  rw [fillR_get, fillR_get, fillR_get]
+  by_cases h1 : lo ≤ k ∧ k < lo + n'
+  · rw [if_pos h1, if_pos h1]
+  · rw [if_neg h1, if_neg h1, if_neg (show ¬ (lo ≤ k ∧ k < lo + n) by omega)]
+
+theorem fillR_fillR_le (M : Mem) {lo n n' : Nat} (g g' : Nat → BitVec 8) (h : n' ≤ n) :
+    fillR (fillR M lo n g) lo n' g' = fillR M lo n (mergeG lo n' g' g) := by
+  apply Std.ExtHashMap.ext_getElem?
+  intro k
+  rw [fillR_get, fillR_get, fillR_get]
+  by_cases h1 : lo ≤ k ∧ k < lo + n'
+  · rw [if_pos h1, if_pos (show lo ≤ k ∧ k < lo + n by omega)]
+    unfold mergeG; rw [if_pos h1.2]
+  · rw [if_neg h1]
+    by_cases h2 : lo ≤ k ∧ k < lo + n
+    · rw [if_pos h2, if_pos h2]
+      unfold mergeG; rw [if_neg (show ¬ k < lo + n' by omega)]
+    · rw [if_neg h2, if_neg h2]
+
+/-! ### Register-file compaction by one kernel evaluation -/
+
+/-- An `upd` chain as a list, newest first. -/
+def updL (R : Nat → BitVec 64) : List (Nat × BitVec 64) → Nat → BitVec 64
+  | [] => R
+  | (k, v) :: t => upd (updL R t) k v
+
+/-- Keep the newest update of each register. -/
+def dedupL : List (Nat × BitVec 64) → List Nat → List (Nat × BitVec 64)
+  | [], _ => []
+  | (k, v) :: t, seen => bif seen.contains k then dedupL t seen else (k, v) :: dedupL t (k :: seen)
+
+theorem updL_dedup (R : Nat → BitVec 64) :
+    ∀ (L : List (Nat × BitVec 64)) (seen : List Nat) (r : Nat), r ∉ seen →
+      updL R (dedupL L seen) r = updL R L r
+  | [], _, _, _ => rfl
+  | (k, v) :: t, seen, r, hr => by
+    unfold dedupL
+    cases hc : seen.contains k
+    · simp only [Bool.cond_false, updL, upd]
+      by_cases h : r = k
+      · rw [if_pos h, if_pos h]
+      · rw [if_neg h, if_neg h]
+        exact updL_dedup R t (k :: seen) r (by simp only [List.mem_cons, not_or]; exact ⟨h, hr⟩)
+    · simp only [Bool.cond_true, updL, upd]
+      have hk : k ∈ seen := List.contains_iff_mem.mp hc
+      rw [if_neg (fun h => hr (by rw [h]; exact hk))]
+      exact updL_dedup R t seen r hr
+
+theorem swp_compact {live : Nat → Prop} {text : List (Nat × BitVec 8)} {rs : List Nat} {S : Nat → Prop}
+    {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {pc : BitVec 64} {Mt : Mem}
+    (R : Nat → BitVec 64) (L : List (Nat × BitVec 64))
+    (h : SWP live text rs S Q pc (updL R (dedupL L [])) Mt) : SWP live text rs S Q pc (updL R L) Mt :=
+  swp_congr (fun r _ _ => updL_dedup R L [] r List.not_mem_nil) h
+
+section CompactK
+open Lean Elab Tactic Meta
+
+/-- The chain of an `upd` term, newest first, with literal keys. -/
+partial def updList (e : Expr) (acc : Array (Nat × Expr)) : MetaM (Expr × Array (Nat × Expr)) := do
+  let e := e.consumeMData
+  if e.isAppOfArity ``upd 3 then
+    let args := e.getAppArgs
+    let kn? ← match args[1]!.nat? with
+      | some n => pure (some n)
+      | none => (evalNat args[1]!).run
+    let some kn := kn? | return (e, acc)
+    updList args[0]! (acc.push (kn, args[2]!))
+  else return (e, acc)
+
+/-- Drop the shadowed register updates of the main goal when the chain has at least `min`
+updates. The equality of the two register files is `updL_dedup`; the kernel evaluates `dedupL`
+on the literal keys. -/
+def compactRegs (min : Nat) : TacticM Unit := do
+  let g ← getMainGoal
+  g.withContext do
+  let ty ← whnfR (← instantiateMVars (← g.getType))
+  unless ty.getAppFn.isConstOf ``SWP do throwError "nx_compactR: not an SWP goal"
+  let args := ty.getAppArgs
+  let (base, ups) ← updList args[6]! #[]
+  if ups.size < min then return
+  let pairTy ← mkAppM ``Prod #[mkConst ``Nat, mkApp (mkConst ``BitVec) (mkNatLit 64)]
+  let mut L ← mkAppOptM ``List.nil #[pairTy]
+  let mut R' := base
+  let mut seen : Array Nat := #[]
+  let mut kept : Array (Nat × Expr) := #[]
+  for (k, v) in ups do
+    unless seen.contains k do
+      seen := seen.push k
+      kept := kept.push (k, v)
+  for (k, v) in ups.reverse do
+    L ← mkAppM ``List.cons #[← mkAppM ``Prod.mk #[toExpr k, v], L]
+  for (k, v) in kept.reverse do
+    R' := mkApp3 (mkConst ``upd) R' (toExpr k) v
+  let newTy := mkAppN ty.getAppFn (args.set! 6 R')
+  let m ← mkFreshExprSyntheticOpaqueMVar newTy (← g.getTag)
+  let pf := mkAppN (mkConst ``swp_compact) #[args[0]!, args[1]!, args[2]!, args[3]!, args[4]!, args[5]!, args[7]!, base, L, m]
+  g.assign pf
+  replaceMainGoal [m.mvarId!]
+
+/-- `nx_compactR`: drop the shadowed register updates of an `SWP` goal. -/
+elab "nx_compactR" : tactic => compactRegs 0
+
+/-- `nx_compactIf n`: as `nx_compactR`, only when the chain has at least `n` updates. -/
+elab "nx_compactIf " n:num : tactic => compactRegs n.getNat
+
+end CompactK
+
 end VsaIris.Sym

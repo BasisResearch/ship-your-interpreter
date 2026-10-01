@@ -7,7 +7,7 @@ open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState Config Step Steps)
 open Vsa.Logic
-open Vsa.Sim.Code (MemcpyLoaded memcpyChunk0 memcpyChunk1 memcpyChunk2 memcpyChunk3 memcpyChunk4)
+open Vsa.Sim.Code (MemcpyLoaded)
 
 set_option maxHeartbeats 8000000
 set_option maxRecDepth 1000000

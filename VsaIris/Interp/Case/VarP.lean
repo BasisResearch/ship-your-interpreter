@@ -1,5 +1,6 @@
 import VsaIris.Interp.Case.VarT
 import VsaIris.Interp.LeafErr
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -16,7 +17,7 @@ open Vsa.MemRepr Vsa.Sim
     (h8 : R 8 = aX) (h18 : R 18 = inp) (h2 : R 2 = s + 18446744073709550528#64) :
     IW live m (leafView aX.toNat 8)
     (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) Q 0x80003f80#64 R Mt
-  by ix_run hlive using [h8, h18, h2, hsf] at 0x80003fac
+  by sym_run hlive using [h8, h18, h2, hsf] at 0x80003fac
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
@@ -113,8 +114,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     %(getSaved.map fun j => (j, R1 j)) %(by simp [getSaved])
   ihave #Hx := strAt_of_cstringWithin hfs.str (sharedWin_of_readOK hgeo) $$ Hro
   iapply ms_callEnv3 (wpW _) (i := 0x80003440) (entry := envGetPC) (R := R1)
-    (jalx_80003440 live (fun p hp => hlive _ (interp_code_80003440 p hp)))
-    interp_code_80003440 (by decide)
+    ((step% jalx 0x80003440) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide)
     (φ := EnvSp (R1 2) envGetNeed ∧ SlotWin (R1 12).toNat)
     ⟨⟨(by rw [e2, hsf]; unfold htifLo envGetNeed; unfold Vsa.Sim.tohostAddr at *; omega),
        (by rw [e2, hsf]; omega), (by rw [e2, hsf]; omega)⟩,
@@ -161,7 +162,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
       · ipureintro; exact hB
       · iexact Hbw
     intro F'
-    refine it_80003444 hlive (fun _ => ?_) (fun hc => absurd (by
+    refine (step% it 0x80003444) hlive (fun _ => ?_) (fun hc => absurd (by
       simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact hres) hc)
     refine VarP_run3 (aX := aX) (s := s) (sret := sret) (inp := BitVec.ofNat 64 inp) hlive hsf hs'
       hs2 hs3 hx1 hx2 hx3 ?_ ?_ ?_ ?_
@@ -174,7 +175,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     unfold F'
     iintro ⟨⟨#HE, #Hcode, #Hx, Hst, Hw, Hk⟩, Hms⟩
     iapply ev_rtErr (wpW _) (N := N) (L := L) (Room := Room) (inp := inp) HN hcl
-      (jalx_80003fac live (fun p hp => hlive _ (interp_code_80003fac p hp))) interp_code_80003fac
+      ((step% jalx 0x80003fac) live (fun p hp => hlive _ ((interp_code (by decide)) p hp))) (interp_code (by decide))
       (sret := sret) (s := s) (n := evalNeed (.var x) d) (p := q) (x := x)
       (fun hro hs => varFmt_ok hro hs 0#64) hfs.lt hsg
       (by have := hroom.room; unfold evalFrame at this; omega) hdj
@@ -215,7 +216,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.Newlib
     · iexact Hbw
   intro F'
 
-  refine it_80003444 hlive (fun hc => by
+  refine (step% it 0x80003444) hlive (fun hc => by
     simp only [upd_apply, Nat.reduceEqDiff, ite_false] at hc; rw [hres] at hc; exact absurd hc (by decide))
     (fun hnz => ?_)
   refine VarT_run2 (aX := aX) (s := s) (sret := sret) (ret := ret) (v8 := rv 8) (v9 := rv 9)

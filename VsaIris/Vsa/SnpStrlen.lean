@@ -238,7 +238,7 @@ theorem sl_peel_step {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1)
   have hh := SR.htif
   have hR1 : R 1 = R0 1 := hkp 1 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
   have hb : ReadB Dt DA S Mt (a + j) (g (a + j)) := SR.win _ (by omega) (by omega)
-  refine ntP_80006d78 hlive ?_ ?_
+  refine (step% ntP 0x80006d78) hlive ?_ ?_
   · rw [h14]; sx_addr
   rintro v ⟨f, hfD, hfS, rfl⟩
   have e14 : (R 14 + LeanRV64DExecutable.Functions.sign_extend (m := 64) (0#12)).toNat = a + j := by

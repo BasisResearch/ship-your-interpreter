@@ -1,4 +1,5 @@
 import VsaIris.Vsa.MallocBlocks2
+import VsaIris.Vsa.HeapPermit
 
 namespace VsaIris.VsaHeap
 
@@ -33,9 +34,7 @@ theorem malloc_entry {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {brkv : Nat}
     (Hp : MHeap C C.Mt0 brkv chunks bins) :
     AW C.live C.S C.Q mallocEntryBV R C.Mt0 := by
   rw [show mallocEntryBV = 0x80004790#64 from rfl]
-  refine st_80004790 O.live ?_
-  refine st_80004794 O.live ?_
-  refine st_80004798 O.live ?_
+  rgn_step O.live at 0x800047a8
   refine malloc_all O ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ Hp <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · exact hra

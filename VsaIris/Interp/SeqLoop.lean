@@ -1,4 +1,5 @@
 import VsaIris.Interp.Arm
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -56,7 +57,7 @@ theorem ofNat_toInt_small {a : Nat} (h : a < 2 ^ 31) : (BitVec.ofNat 64 a).toInt
     (harr : ldv .ld m (aS + 8#64).toNat = arr)
     (hel : ldv .ld m (arr + BitVec.ofNat 64 idx <<< 3).toNat = pS) :
     IW live m (blockView aS.toNat arr.toNat count) (InExt (s.toNat - 176, 176)) Q 0x800041a4#64 R Mt
-  by ix_run hlive using [h8, h16, h2, harr, hel, hsf] at 0x800041c4
+  by sym_run hlive using [h8, h16, h2, harr, hel, hsf] at 0x800041c4
 
 #ix_seg BlockLoop_runB {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -70,7 +71,7 @@ theorem ofNat_toInt_small {a : Nat} (h : a < 2 ^ 31) : (BitVec.ofNat 64 a).toInt
     (hi : ldv .ld Mt (s + 18446744073709551440#64 + 8#64).toNat = BitVec.ofNat 64 idx)
     (hcnt : ldv .lw m (aS + 16#64).toNat = BitVec.ofNat 64 count) :
     IW live m (blockView aS.toNat arr.toNat count) (InExt (s.toNat - 176, 176)) Q 0x800041c8#64 R Mt
-  by ix_run hlive using [h8, h2, h10, hi, hcnt, hsf] at 0x800041a4 0x8000409c
+  by sym_run hlive using [h8, h2, h10, hi, hcnt, hsf] at 0x800041a4 0x8000409c
 
 structure BlockNode (m : Mem) (P : Nat → Prop) (aS arr : BitVec 64) (count : Nat)
     (all : List Vsa.While.Stmt) : Prop where
@@ -234,8 +235,8 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
   ihave H1 := h1
   rw [show k + (n1 + n2) = k + n2 + n1 by omega]
   iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800041c4)
-    (jalx_800041c4 live (fun p hp => hlive _ (interp_code_800041c4 p hp)))
-    interp_code_800041c4 (by decide) D1 (k := k + n2) (aS := BitVec.ofNat 64 p) (aE := aInner)
+    ((step% jalx 0x800041c4) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) D1 (k := k + n2) (aS := BitVec.ofNat 64 p) (aE := aInner)
     (aRet := aRet) (s := s + 18446744073709551440#64) (m := m')
     (hsg'.narrow hneed) hneed hsg'.le hslg hbb
   iframe H1 Hcode Hfr Hms Hst Hslot Hw
@@ -373,8 +374,8 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
 
   ihave H1 := h1
   iapply ms_callExecT (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800041c4)
-    (jalx_800041c4 live (fun p hp => hlive _ (interp_code_800041c4 p hp)))
-    interp_code_800041c4 (by decide) D1 (k := k) (aS := BitVec.ofNat 64 p) (aE := aInner)
+    ((step% jalx 0x800041c4) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) D1 (k := k) (aS := BitVec.ofNat 64 p) (aE := aInner)
     (aRet := aRet) (s := s + 18446744073709551440#64) (m := m')
     (hsg'.narrow hneed) hneed hsg'.le hslg hbb
   iframe H1 Hcode Hfr Hms Hst Hslot Hw
@@ -467,8 +468,8 @@ open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode VsaIris.Inst Vsa.Run
 
   ihave H1 := execSpecsP_at Core st d inner sm $$ IH
   iapply ms_callExecP (N := N) (L := L) (Room := Room) (inp := inp) (i := 0x800041c4)
-    (jalx_800041c4 live (fun p hp => hlive _ (interp_code_800041c4 p hp)))
-    interp_code_800041c4 (by decide) (Core := Core) (st := st) (d := d) (env := inner) (sm := sm)
+    ((step% jalx 0x800041c4) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (Core := Core) (st := st) (d := d) (env := inner) (sm := sm)
     (aS := BitVec.ofNat 64 p) (aE := aInner) (aRet := aRet) (s := s + 18446744073709551440#64)
     (m := m') (Kret := iprop(∀ (R' : Nat → BitVec 64) (Mt' : Mem) (st' : St) (status : Status),
         ⌜ExecSeq st d inner (sm :: ss) st' status⌝ -∗

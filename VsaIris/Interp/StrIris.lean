@@ -1,4 +1,4 @@
-import VsaIris.Interp.StrSteps
+import VsaIris.Vsa.StepTables.Str0
 import VsaIris.Interp.SpecEnv
 import VsaIris.Vsa.BinImg
 

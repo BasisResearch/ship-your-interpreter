@@ -1,11 +1,6 @@
-import Vsa.Sim.StrcmpSites
+import Vsa.Sim.Code.Strcmp
 import Vsa.Sim.ChainFrameOut
-import Vsa.Sim.Muldi3Spec
-import Vsa.Sim.DivSpec
 import Vsa.Sim.StrlenSpec
-import Vsa.MemRepr
-import Vsa.Triple
-import Vsa.Sim.ObsAvoid
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register

@@ -1,6 +1,7 @@
 import VsaIris.Interp.ExecEnv
 import VsaIris.Interp.LeafArm
 import VsaIris.Interp.ExecOom
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -51,7 +52,7 @@ theorem varNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {x : String}
     (hi : ldv .ld m (aS + 16#64).toNat = aI) (hi0 : aI ≠ 0#64) :
     IW live m (stmtView aS.toNat 24) (InExt (s.toNat - 176, 176)) Q 0x80004014#64 R Mt
   by rw [← upd_eq_self h16]
-     ix_run hlive using [h8, h14, h2, hk, hku, hi, hi0, hsf] at 0x800040ec
+     sym_run hlive using [h8, h14, h2, hk, hku, hi, hi0, hsf] at 0x800040ec
 
 #ix_seg VarArm_run1N {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -66,13 +67,13 @@ theorem varNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {x : String}
     (hi : ldv .ld m (aS + 16#64).toNat = 0#64) :
     IW live m (stmtView aS.toNat 24) (InExt (s.toNat - 176, 176)) Q 0x80004014#64 R Mt
   by rw [← upd_eq_self h16]
-     ix_run hlive using [h8, h14, h2, hk, hku, hi, hsf] at 0x80004300
+     sym_run hlive using [h8, h14, h2, hk, hku, hi, hsf] at 0x80004300
 
 #ix_seg VarArm_runJ {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} :
     IW live m [] (InExt (s.toNat - 176, 176)) Q 0x80004304#64 R Mt
-  by ix_run hlive at 0x800040f0
+  by sym_run hlive at 0x800040f0
 
 #ix_seg VarArm_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -84,13 +85,13 @@ theorem varNode_of {m : Mem} {P : Nat → Prop} {aS : BitVec 64} {x : String}
     (h8 : R 8 = aS) (h2 : R 2 = s + 18446744073709551440#64)
     (hn : ldv .ld m (aS + 8#64).toNat = pn) :
     IW live m (stmtView aS.toNat 24) (InExt (s.toNat - 176, 176)) Q 0x800040f0#64 R Mt
-  by ix_run hlive using [h8, h2, hn, hsf] at 0x80004114
+  by sym_run hlive using [h8, h2, hn, hsf] at 0x80004114
 
 #ix_seg VarArm_run3 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s : BitVec 64} :
     IW live m [] (InExt (s.toNat - 176, 176)) Q 0x80004118#64 R Mt
-  by ix_run hlive at 0x8000409c
+  by sym_run hlive at 0x8000409c
 
 section Tail
 
@@ -176,8 +177,8 @@ theorem varTail (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
   ihave Hst := eSt $$ Hst
   ihave Hval := eVal $$ Hval
   iapply ms_callEnvDefine (N := N) Wp (i := 0x80004114)
-    (jalx_80004114 live (fun p hp => hlive _ (interp_code_80004114 p hp)))
-    interp_code_80004114 (by decide) (k := k) (st := st.store) (fa := env) (x := x) (v := v)
+    ((step% jalx 0x80004114) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (k := k) (st := st.store) (fa := env) (x := x) (v := v)
     (R := R2)
     ⟨by rw [h22, hfg.sf]; have := hfg.lo; unfold htifLo envDefineNeed allocHeadroom; omega,
       by rw [h22, hfg.sf]; have := hfg.hi; omega, by rw [h22, hfg.sf]; have := hfg.al; omega⟩
@@ -342,8 +343,8 @@ theorem varTailP (hlive : ∀ p ∈ interpText, live p.1) (HN : Newlib.NewlibHol
   ihave Hst := eSt $$ Hst
   ihave Hval := eVal $$ Hval
   iapply ms_callEnvDefineP (N := N) HN hcl (i := 0x80004114)
-    (jalx_80004114 live (fun p hp => hlive _ (interp_code_80004114 p hp)))
-    interp_code_80004114 (by decide) (st := st) (d := d) (fa := env) (x := x) (v := v)
+    ((step% jalx 0x80004114) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (st := st) (d := d) (fa := env) (x := x) (v := v)
     (R := R2) (n := execNeed (.varDecl x eo) d - 176)
     ⟨by rw [h22, hfg.sf]; have := hfg.lo; unfold htifLo envDefineNeed allocHeadroom; omega,
       by rw [h22, hfg.sf]; have := hfg.hi; omega, by rw [h22, hfg.sf]; have := hfg.al; omega⟩

@@ -2,8 +2,7 @@ import VsaIris.Vsa.Tools
 import VsaIris.MachWP
 import Vsa.Sim.HtifStepObs
 import Vsa.Sim.TermEntry
-import Vsa.Sim.DecodeTable.Batch14Part06
-import Vsa.Sim.DecodeTable.Batch17
+import Vsa.Sim.DecodeNF
 
 namespace VsaIris.Inst
 
@@ -219,17 +218,6 @@ theorem wp_exitW (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
 
 end Wp
 
-theorem vsa_adequacy_exit {GF : BundledGFunctors} [MachGpreS GF] (live : Nat → Prop)
-    (c : Config) (mr : NatMap (BitVec 64)) (mm : NatMap (BitVec 8))
-    (hr : RegAgree (vsaModel live) mr c) (hm : MemAgree (vsaModel live) mm c)
-    (hok : VsaOk live c) (φ : Nat × String → Prop)
-    (H : AdequacyHyp GF (vsaModel live) mr mm (output c.σ) φ) :
-    ∃ e out, Vsa.Machine.Halts c out e ∧ φ (e, out) := by
-  obtain ⟨e, out, ⟨cf, hre, hh⟩, hφ⟩ :=
-    mach_adequacy (GF := GF) (M := vsaModel live) c mr mm hr hm hok _ H
-  obtain ⟨σf, hhalt, hout⟩ := vsaStep_halt hh
-  exact ⟨e, out, ⟨cf, σf, steps_of_reaches hre, hhalt, hout⟩, hφ⟩
-
 def putcSite : TohostSite where
   pc := 0x8000005c
   b0 := 0x23#8
@@ -245,7 +233,7 @@ def putcSite : TohostSite where
 theorem putcSite_cert : putcSite.Cert where
   word := by decide
   notrvc := by decide
-  dec := fun σ h1 h2 h3 => DecodeTable.decode_caf83423 σ h1 h2 h3
+  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0xcaf83423#32) σ h1 h2 h3
   addr := by decide
   rs1 := by decide
   rs2 := by decide
@@ -268,7 +256,7 @@ def exitSite : TohostSite where
 theorem exitSite_cert : exitSite.Cert where
   word := by decide
   notrvc := by decide
-  dec := fun σ h1 h2 h3 => DecodeTable.decode_b6f73a23 σ h1 h2 h3
+  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0xb6f73a23#32) σ h1 h2 h3
   addr := by decide
   rs1 := by decide
   rs2 := by decide

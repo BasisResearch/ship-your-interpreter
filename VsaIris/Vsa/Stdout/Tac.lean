@@ -75,12 +75,40 @@ macro_rules
         BitVec.reduceAppend, not_true_eq_false, Nat.reducePow, Nat.reduceMod, BitVec.reduceAnd,
         BitVec.reduceOr])
 
+/-- Hook run before each normalisation of `nx_run`; `skip` by default. `open scoped Win` makes it
+compact the register file. -/
+syntax "nx_tidy" : tactic
+macro_rules | `(tactic| nx_tidy) => `(tactic| skip)
+
+section Leftover
+
+open Lean Elab Tactic
+
+/-- Clear the hypotheses a run introduced (decided branch conditions, forgotten bytes no longer
+mentioned), so a leftover states only the reached machine state. -/
+elab "nx_clean" : tactic => do
+  let g ← getMainGoal
+  let fs ← g.withContext do
+    let lctx ← getLCtx
+    return lctx.foldl (init := #[]) fun acc d =>
+      if !d.isImplementationDetail && d.userName.hasMacroScopes then acc.push d.fvarId else acc
+  let g' ← g.tryClearMany fs
+  replaceMainGoal [g']
+
+/-- The run reached exactly one state: every branch was decided and no side goal is open. -/
+elab "nx_one" : tactic => do
+  let gs ← getUnsolvedGoals
+  unless gs.length == 1 do
+    throwError "nx_one: {gs.length} leftover goals (an undecided branch or an open side goal)"
+
+end Leftover
+
 open Lean Elab Tactic Meta in
 
 def nxNorm (facts : Array Term) : TacticM Syntax := do
   let lems : Array (TSyntax `Lean.Parser.Tactic.simpLemma) ←
     facts.mapM fun f => `(Lean.Parser.Tactic.simpLemma| $f:term)
-  `(tactic| ((try simp only [updAll] at ⊢) <;> (try simp only [nx_mt] at ⊢) <;> (try nx_norm) <;> (try simp only [$lems,*]) <;>
+  `(tactic| ((try nx_tidy) <;> (try simp only [updAll] at ⊢) <;> (try simp only [nx_mt] at ⊢) <;> (try nx_norm) <;> (try simp only [$lems,*]) <;>
       (try nx_norm) <;> (try nx_mem) <;> (try nx_console) <;> (try simp only [$lems,*]) <;>
       (try nx_norm) <;> (try simp (disch := omega) only [toInt_ofNat_small, BitVec.toInt_zero]) <;>
       (try simp (disch := decide) only [update_aligned]) <;>
@@ -249,9 +277,15 @@ theorem retOK_of {R Rf : Nat → BitVec 64} {a0 : BitVec 64} (h10 : Rf 10 = a0)
 macro "ret_keep" : tactic => `(tactic| (
   intro x hx h32 h10 hc
   simp only [iRegs, callClob, List.mem_cons, List.not_mem_nil, or_false, not_or] at hx hc
-  rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-    simp_all [upd_apply]))
+  rcases hx with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h |
+    h | h | h | h | h | h | h | h | h <;> subst h <;>
+    first
+      | exact absurd rfl h32
+      | exact absurd rfl h10
+      | (simp only [Nat.reduceEqDiff, not_true_eq_false, not_false_eq_true, false_and, and_false,
+          true_and, and_true] at hc; done)
+      | (simp only [upd_apply, updAll, Nat.reduceEqDiff, ite_true, ite_false, *]; done)
+      | simp_all [upd_apply]))
 
 theorem updAll_apply (R v : Nat → BitVec 64) : ∀ (xs : List Nat) (x : Nat),
     updAll R v xs x = if x ∈ xs then v x else R x

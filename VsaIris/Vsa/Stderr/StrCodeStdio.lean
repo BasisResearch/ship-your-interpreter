@@ -4,11 +4,8 @@ namespace VsaIris.Sym
 
 open VsaIris.Interp
 
-theorem strCode_stdio_all : strCode.all (fun p => stdioText.contains p) = true := by
-  decide +kernel
-
-theorem strCode_stdio : ∀ p ∈ strCode, p ∈ stdioText := fun p hp => by
-  have := List.all_eq_true.1 strCode_stdio_all p hp
-  simpa using this
+theorem strCode_stdio : ∀ p ∈ strCode, p ∈ stdioText := fun p hp =>
+  List.mem_append_left _ (Vsa.Sim.mem_piecesText (List.all_eq_true.1
+    (by decide +kernel : strCode.all (fun p => Vsa.Sim.piecesHasB stdioPieces p.1 p.2) = true) p hp))
 
 end VsaIris.Sym

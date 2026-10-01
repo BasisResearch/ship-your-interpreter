@@ -1,10 +1,11 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Inner
 import VsaIris.Vsa.Stderr.VfpEntry
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 local macro_rules | `(tactic| sx_side) => `(tactic| closed_decide)
 
@@ -61,7 +62,7 @@ theorem vfp_begin (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem
     (hk : ∀ R' Mt', VfpBegin R R' Mt Mt' sp f P →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a9b0#64 R' Mt') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a884#64 R Mt := by
-  have hsp : (sp + 592#64).toNat = sp.toNat + 592 := sp_lit (by omega)
+  nx_win sp 1024 592; have hsp : (sp + 592#64).toNat = sp.toNat + 592 := sp_lit (by omega)
   have hsp' : R 2 - 592#64 = sp := by rw [h2, BitVec.add_sub_cancel]
   refine vfpEntry_run hlive t Mt R s need (by rw [h2, hsp]; omega) (by rw [h2, hsp]; omega) hs3 hs4
     (by rw [h2, hsp]; omega) (R 1) _ _ _ _ rfl h10 h11 h12 rfl hdec hdA hdv fun R1 Mt1 E => ?_
@@ -109,7 +110,7 @@ theorem vfpInnerLld (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ 
       R' 10 = BitVec.ofNat 64 (lldBytes v).length → (∀ x ∈ vfpSaved, R' x = R x) → SbFile M' f pend' → LocMb M' → Frame M' Mt (InnerReg f.toNat sp.toNat) →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs out) (R 1) R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a884#64 R Mt := by
-  refine vfp_begin hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa h2 h10 h11 h12 hdec hdA hdv hF fun R3 Mt3 B => ?_
+  nx_win sp 1024 592; refine vfp_begin hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa h2 h10 h11 h12 hdec hdA hdv hF fun R3 Mt3 B => ?_
   have hsp6 : sp.toNat + 600 < 2 ^ 64 := by omega
   have eo : ∀ k : Nat, k ≤ 600 → (sp + BitVec.ofNat 64 k).toNat = sp.toNat + k := fun k hk => sp_lit (by omega)
   have HL := B.loop

@@ -1,5 +1,6 @@
 import VsaIris.Interp.LeafCalls
 import VsaIris.Interp.EnvScan
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -17,7 +18,7 @@ open Vsa.MemRepr Vsa.Sim
     (hk : ldv .lw m aX.toNat = 10#64) (hku : ldv .lwu m aX.toNat = 10#64) :
     IW live m (leafView aX.toNat 0)
     (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) Q 0x80003164#64 R Mt
-  by ix_run hlive using [h10, h11, h12, h13, h2, hk, hku, hsf] at 0x800033cc
+  by sym_run hlive using [h10, h11, h12, h13, h2, hk, hku, hsf] at 0x800033cc
 
 #ix_seg FnLitT_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -28,7 +29,7 @@ open Vsa.MemRepr Vsa.Sim
     IW live m (leafView aX.toNat 0)
     (fun b => (InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) ∨ InExt (pv.toNat, 16) b)
     Q 0x800033d0#64 R Mt
-  by ix_run hlive using [h2, hA, hsf] at 0x800033d4
+  by sym_run hlive using [h2, hA, hsf] at 0x800033d4
 
 #ix_seg FnLitT_run3 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -51,7 +52,7 @@ open Vsa.MemRepr Vsa.Sim
     IW live m (leafView aX.toNat 0)
     (fun b => (InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) ∨ InExt (pv.toNat, 16) b)
     Q 0x800033d8#64 R Mt
-  by ix_run hlive using [h10, h13, h8, h9, h2, hRA, hS0, hS1, hS2, hsf, hal, e8, p8]
+  by sym_run hlive using [h10, h13, h8, h9, h2, hRA, hS0, hS1, hS2, hsf, hal, e8, p8]
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap
@@ -136,8 +137,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap
   ihave ⟨Hslack, Hst⟩ := stackScratch_narrow (n := evalNeed (.fn nm ps body) d - 1088)
     (m := allocHeadroom) (by rw [hsf]; omega) (by omega) $$ Hst
   iapply ms_callMalloc A (twpW _) (i := 0x800033cc) (R := R1)
-    (jalx_800033cc live (fun p hp => hlive _ (interp_code_800033cc p hp)))
-    interp_code_800033cc (by decide) (.counted k) H closureBytes
+    ((step% jalx 0x800033cc) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide) (.counted k) H closureBytes
     (by rw [e10]; exact ⟨by decide, by decide⟩)
     (by rw [e2]; exact ⟨by rw [hsf]; unfold allocHeadroom Vsa.Sim.tohostAddr; omega,
       by rw [hsf]; omega, by rw [hsf]; omega⟩)
@@ -192,7 +193,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr VsaIris.VsaHeap
   refine FnLitT_run2 (aX := aX) (s := s) (sret := sret) (pv := R2 10) (aE := aE) hlive hsf hs'
     hs2 hs3 (by ix_reg; rw [hkeep2 2 (by decide) (by decide)]; exact e2) hA2 ?_
   intros
-  refine it_800033d4 hlive (fun hc => absurd (by
+  refine (step% it 0x800033d4) hlive (fun hc => absurd (by
     simp only [upd_apply, Nat.reduceEqDiff, ite_false] at hc
     exact congrArg BitVec.toNat hc) hpne) (fun hnz => ?_)
   refine FnLitT_run3 (aX := aX) (s := s) (sret := sret) (pv := R2 10) (aE := aE) (ret := ret)

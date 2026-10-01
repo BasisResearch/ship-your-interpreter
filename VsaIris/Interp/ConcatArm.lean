@@ -130,8 +130,8 @@ theorem concat_route {live : Nat → Prop} {Dt : Mem} {DA : List Nat} {S : Nat �
     decide
   have huu : ∀ (a b : BitVec 64), upd (upd R 15 a) 15 b = upd R 15 b := fun a b => by
     funext x; simp only [upd_apply]; split <;> rfl
-  refine it_80003888 hlive (it_8000388c hlive (fun _ => hk _) fun h1 =>
-    it_80003890 hlive (it_80003894 hlive (fun _ => ?_) fun h2 => ?_))
+  refine (step% it 0x80003888) hlive ((step% it 0x8000388c) hlive (fun _ => hk _) fun h1 =>
+    (step% it 0x80003890) hlive ((step% it 0x80003894) hlive (fun _ => ?_) fun h2 => ?_))
   · rw [huu]; exact hk _
   · exfalso
     simp only [upd_apply, ite_true, show (16 : Nat) ≠ 15 from by decide, ite_false, hse] at h1 h2

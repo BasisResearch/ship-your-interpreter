@@ -1,5 +1,6 @@
 import VsaIris.Interp.CallNativeSeg
 import VsaIris.Interp.CallPrefixP
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -275,7 +276,7 @@ theorem fnNode_of {m : Mem} {P : Nat → Prop} {q : BitVec 64} {name : Option St
     (hW2 : ldv .ld Mt (s + 18446744073709550528#64 + 112#64).toNat = w2)
     (hK : ldv .lw Mt (s + 18446744073709550528#64 + 96#64).toNat = 4#64) :
     IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003254#64 R Mt
-  by ix_run hlive using [h8, h2, hW0, hW1, hW2, hK, hsf] at 0x80003288
+  by sym_run hlive using [h8, h2, hW0, hW1, hW2, hK, hsf] at 0x80003288
 
 #ix_seg CallK_runB {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Dt Mt : Mem} {R : Nat → BitVec 64}
@@ -287,7 +288,7 @@ theorem fnNode_of {m : Mem} {P : Nat → Prop} {q : BitVec 64} {name : Option St
     (h13 : R 13 = cp) (h2 : R 2 = s + 18446744073709550528#64)
     (hq : ldv .ld Dt cp.toNat = q) :
     IW live Dt (accAddrs cp.toNat 16) (InExt (s.toNat - 1088, 1088)) Q 0x80003288#64 R Mt
-  by ix_run hlive using [h13, h2, hq, hsf] at 0x80003294
+  by sym_run hlive using [h13, h2, hq, hsf] at 0x80003294
 
 #ix_seg CallK_runC {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Dt Mt : Mem} {R : Nat → BitVec 64}
@@ -303,7 +304,7 @@ theorem fnNode_of {m : Mem} {P : Nat → Prop} {q : BitVec 64} {name : Option St
     (hdep : ldv .lw Mt (inp + 8#64).toNat = BitVec.ofNat 64 dep) :
     IW live Dt (accAddrs (q.toNat + 24) 4)
       (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (inp.toNat + 8, 4) b) Q 0x80003294#64 R Mt
-  by ix_run hlive using [h14, h18, h2, hpc, hdep, hsf] at 0x80003d60 0x80003ca4 0x800032b4
+  by sym_run hlive using [h14, h18, h2, hpc, hdep, hsf] at 0x80003d60 0x80003ca4 0x800032b4
 
 #ix_seg CallK_runD {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Dt Mt : Mem} {R : Nat → BitVec 64}
@@ -316,7 +317,7 @@ theorem fnNode_of {m : Mem} {P : Nat → Prop} {q : BitVec 64} {name : Option St
     (he : ldv .ld Dt (cp + 8#64).toNat = e) :
     IW live Dt (accAddrs cp.toNat 16)
       (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (inp.toNat + 8, 4) b) Q 0x800032b4#64 R Mt
-  by ix_run hlive using [h13, h2, he, hsf] at 0x800032bc
+  by sym_run hlive using [h13, h2, he, hsf] at 0x800032bc
 
 end VsaIris.Interp
 

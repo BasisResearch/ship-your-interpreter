@@ -1,9 +1,19 @@
 import VsaIris.Vsa.ReallocCopy
+import VsaIris.Vsa.HeapPermit
 
 namespace VsaIris.VsaHeap
 
 open Vsa.MemRepr Vsa.Sim Vsa.Sim.DlHeap VsaIris.Inst VsaIris.Sym VsaIris.MallocFast
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail
+
+theorem copyW_fold (m : Mem) (d s j : Nat) {a a' : Nat} (ha : a = d + 8 * j) (ha' : a' = s + 8 * j) :
+    writeLog (copyW m d s j) [(a, 8, ldv .ld (copyW m d s j) a')] = copyW m d s (j + 1) := by
+  subst ha ha'; rfl
+
+/-- Normalise a copy path's goal: register reads, immediates, and completed word copies. -/
+macro "cp_norm" : tactic =>
+  `(tactic| simp (disch := rgn_arith) only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false,
+      sign_extend, Sail.BitVec.signExtend, BitVec.reduceSignExtend, BitVec.reduceAdd, copyW_fold])
 
 structure CPArgs (S : Nat → Prop) (d s n : Nat) : Prop where
   n8 : n % 8 = 0
@@ -22,21 +32,13 @@ structure MMArgs (S : Nat → Prop) (d s n : Nat) : Prop extends CPArgs S d s n 
 
 theorem CPArgs.ld {S : Nat → Prop} {d s n : Nat} (A : CPArgs S d s n) {a : Nat} (h1 : s ≤ a)
     (h2 : a + 8 ≤ s + n) : LdOK a 8 ∧ ∀ b ∈ accAddrs a 8, S b := by
-  have := A.slo; have := A.shi
-  unfold Vsa.Sim.tohostAddr at *
-  refine ⟨by unfold LdOK Vsa.Sim.tohostAddr; omega, fun b hb => ?_⟩
-  obtain ⟨hb1, hb2⟩ := of_mem_accAddrs hb
-  have := A.sS (b - s) (by omega)
-  rwa [show s + (b - s) = b by omega] at this
+  have r : ARgn S s n := ⟨⟨A.sS⟩, A.slo, A.shi⟩
+  exact ⟨r.ldOK ⟨h1, h2⟩, r.acc ⟨h1, h2⟩⟩
 
 theorem CPArgs.st {S : Nat → Prop} {d s n : Nat} (A : CPArgs S d s n) {a : Nat} (h1 : d ≤ a)
     (h2 : a + 8 ≤ d + n) (h8 : a % 8 = 0) : StOK a 8 ∧ ∀ b ∈ accAddrs a 8, S b := by
-  have := A.dlo; have := A.dhi
-  unfold Vsa.Sim.tohostAddr at *
-  refine ⟨by unfold StOK Vsa.Sim.tohostAddr; omega, fun b hb => ?_⟩
-  obtain ⟨hb1, hb2⟩ := of_mem_accAddrs hb
-  have := A.dS (b - d) (by omega)
-  rwa [show d + (b - d) = b by omega] at this
+  have r : ARgn S d n := ⟨⟨A.dS⟩, A.dlo, A.dhi⟩
+  exact ⟨r.stOK ⟨h1, h2, h8⟩, r.acc ⟨h1, h2⟩⟩
 
 theorem MMArgs.ld {S : Nat → Prop} {d s n : Nat} (A : MMArgs S d s n) {a : Nat} (h1 : s ≤ a)
     (h2 : a + 8 ≤ s + n) : LdOK a 8 ∧ ∀ b ∈ accAddrs a 8, S b := A.toCPArgs.ld h1 h2
@@ -126,53 +128,29 @@ theorem mm_l32_rest {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p
       (R' 14).toNat = d + 32 * (n / 32) → (R' 16).toNat = d + 32 * (n / 32) →
       AW live S Q 0x80006a74#64 R' (copyW M0 d s (4 * (n / 32)))) :
     AW live S Q 0x80006a58#64 R (copyW M0 d s (4 * i + 1)) := by
-  have hn := A.n32; have hdhi := A.dhi; have hshi := A.shi
+  have hdhi := A.dhi; have hshi := A.shi
   have hq : 32 * (n / 32) ≤ n := Nat.mul_div_le n 32
-  have eL : ∀ (c k : Nat), 0 < c → c ≤ 32 → 32 - c = 8 * k →
-      (R 11 + BitVec.ofNat 64 (2 ^ 64 - c)).toNat = s + 8 * (4 * i + k) := fun c k h1 h2 h3 => by
-    rw [addr_sub h11 c (by omega) h1]; omega
-  have eS : ∀ (c k : Nat), 0 < c → c ≤ 32 → 32 - c = 8 * k →
-      (R 14 + BitVec.ofNat 64 (2 ^ 64 - c)).toNat = d + 8 * (4 * i + k) := fun c k h1 h2 h3 => by
-    rw [addr_sub h14 c (by omega) h1]; omega
-  have n24 : (sign_extend (m := 64) (0xfe8#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 24) := rfl
-  have n16 : (sign_extend (m := 64) (0xff0#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 16) := rfl
-  have n8 : (sign_extend (m := 64) (0xff8#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 8) := rfl
-  refine mm_pair A (st_80006a58 hlive) (st_80006a5c hlive)
-    (by rw [n24]; exact eL 24 1 (by omega) (by omega) (by omega))
-    (by rw [n24]; exact eS 24 1 (by omega) (by omega) (by omega)) (by omega) ?_
-  have hK1 := hK.upd (ldv .ld (copyW M0 d s (4 * i + 1)) (s + 8 * (4 * i + 1))) (k := 13) (by decide)
-  refine mm_pair A (st_80006a60 hlive) (st_80006a64 hlive)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n16]; exact eL 16 2 (by omega) (by omega) (by omega))
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n16]; exact eS 16 2 (by omega) (by omega) (by omega))
-    (by omega) ?_
-  refine mm_pair A (st_80006a68 hlive) (st_80006a6c hlive)
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n8]; exact eL 8 3 (by omega) (by omega) (by omega))
-    (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [n8]; exact eS 8 3 (by omega) (by omega) (by omega))
-    (by omega) ?_
-  rw [show 4 * i + 3 + 1 = 4 * (i + 1) by omega]
-  have hK3 := ((hK.upd (k := 13) (ldv .ld (copyW M0 d s (4 * i + 1)) (s + 8 * (4 * i + 1))) (by decide)).upd
-    (k := 13) (ldv .ld (copyW M0 d s (4 * i + 2)) (s + 8 * (4 * i + 2))) (by decide)).upd
-    (k := 13) (ldv .ld (copyW M0 d s (4 * i + 3)) (s + 8 * (4 * i + 3))) (by decide)
-  refine st_80006a70 hlive (fun hc => ?_) (fun hc => ?_) <;>
+  generalize n / 32 = q at *
+  refine mm_pair A ((step% st 0x80006a58) hlive) ((step% st 0x80006a5c) hlive) (by rgn_arith)
+    (by rgn_arith) (by omega) ?_
+  refine mm_pair A ((step% st 0x80006a60) hlive) ((step% st 0x80006a64) hlive) (by rgn_arith)
+    (by rgn_arith) (by omega) ?_
+  refine mm_pair A ((step% st 0x80006a68) hlive) ((step% st 0x80006a6c) hlive) (by rgn_arith)
+    (by rgn_arith) (by omega) ?_
+  rw [show 4 * i + 1 + 1 + 1 + 1 = 4 * (i + 1) by omega]
+  refine (step% st 0x80006a70) hlive (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_false] at hc
-  · have hlt : i + 1 < n / 32 := by
-      have : i + 1 ≠ n / 32 := fun he => hc (BitVec.eq_of_toNat_eq (by rw [h14, h16, ← he]; omega))
+  · have hlt : i + 1 < q := by
+      have : i + 1 ≠ q := fun he => hc (BitVec.eq_of_toNat_eq (by rw [h14, h16, ← he]; omega))
       omega
-    exact hnext _ hlt hK3 (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h10)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [h11]; omega)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h12)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [h14]; omega)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h15)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h16)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h17)
-  · have heq : i + 1 = n / 32 := by
+    exact hnext _ hlt (by mm_keep hK) h10
+      (by rw [← show s + 32 * i + 32 = s + 32 * (i + 1) by omega]; exact h11)
+      h12 (by rw [← show d + 32 * i + 32 = d + 32 * (i + 1) by omega]; exact h14) h15 h16 h17
+  · have heq : i + 1 = q := by
       have := congrArg BitVec.toNat (Decidable.of_not_not hc); rw [h14, h16] at this; omega
     rw [heq]
-    exact hk _ hK3 (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h12)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h15)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h17)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; rw [h14]; omega)
-      (by simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h16)
+    exact hk _ (by mm_keep hK) h12 h15 h17
+      (by rw [← heq, ← show d + 32 * i + 32 = d + 32 * (i + 1) by omega]; exact h14) h16
 
 theorem add_sub_toNat {x y z : BitVec 64} {a b c : Nat} (hx : x.toNat = a) (hy : y.toNat = b)
     (hz : z.toNat = c) (hca : c ≤ a) (hlt : b + (a - c) < 2 ^ 64) :
@@ -193,57 +171,17 @@ theorem mm_l32 {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈ 
       AW live S Q 0x80006a48#64 R (copyW M0 d s (4 * i))
   | 0, i, R, hki, hi, _, _, _, _, _, _, _, _ => by omega
   | k + 1, i, R, hki, hi, hK, h10, h11, h12, h14, h15, h16, h17 => by
-    have hn := A.n32; have hdhi := A.dhi; have hshi := A.shi; have hd8 := A.d8
-    have hq : 32 * (n / 32) ≤ n := Nat.mul_div_le n 32
-    have hi1 : 32 * i + 32 ≤ n := by omega
-
-    obtain ⟨hl1, hl2⟩ := A.ld (a := s + 8 * (4 * i)) (by omega) (by omega)
-    obtain ⟨hs1, hs2⟩ := A.st (a := d + 8 * (4 * i)) (by omega) (by omega) (by omega)
-    have e0 : (R 11 + sign_extend (m := 64) (0x000#12)).toNat = s + 8 * (4 * i) := by
-      rw [show (sign_extend (m := 64) (0x000#12) : BitVec 64) = BitVec.ofNat 64 0 from rfl,
-        addr_add h11 0 (by omega)]; omega
-    refine st_80006a48 hlive (by rw [e0]; exact hl1) (by rw [e0]; exact hl2) ?_
-    rw [e0]
-    refine st_80006a4c hlive ?_
-    refine st_80006a50 hlive ?_
-    have h11' : ((upd (upd (upd R 13 (ldv .ld (copyW M0 d s (4 * i)) (s + 8 * (4 * i)))) 11
-        ((upd R 13 (ldv .ld (copyW M0 d s (4 * i)) (s + 8 * (4 * i)))) 11 +
-          sign_extend (m := 64) (0x020#12))) 14
-        ((upd (upd R 13 (ldv .ld (copyW M0 d s (4 * i)) (s + 8 * (4 * i)))) 11
-          ((upd R 13 (ldv .ld (copyW M0 d s (4 * i)) (s + 8 * (4 * i)))) 11 +
-            sign_extend (m := 64) (0x020#12))) 14 + sign_extend (m := 64) (0x020#12))) 11).toNat =
-        s + 32 * i + 32 := by
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      rw [show (sign_extend (m := 64) (0x020#12) : BitVec 64) = BitVec.ofNat 64 32 from rfl,
-        addr_add h11 32 (by omega)]
-    have n32 : (sign_extend (m := 64) (0x020#12) : BitVec 64) = BitVec.ofNat 64 32 := rfl
-    have e1 : ((upd (upd (upd R 13 (ldv .ld (copyW M0 d s (4 * i)) (s + 8 * (4 * i)))) 11
-        ((upd R 13 (ldv .ld (copyW M0 d s (4 * i)) (s + 8 * (4 * i)))) 11 +
-          sign_extend (m := 64) (0x020#12))) 14
-        ((upd (upd R 13 (ldv .ld (copyW M0 d s (4 * i)) (s + 8 * (4 * i)))) 11
-          ((upd R 13 (ldv .ld (copyW M0 d s (4 * i)) (s + 8 * (4 * i)))) 11 +
-            sign_extend (m := 64) (0x020#12))) 14 + sign_extend (m := 64) (0x020#12))) 14 +
-        sign_extend (m := 64) (0xfe0#12)).toNat = d + 8 * (4 * i) := by
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      rw [n32, show (sign_extend (m := 64) (0xfe0#12) : BitVec 64) = BitVec.ofNat 64 (2 ^ 64 - 32) from rfl,
-        addr_sub (addr_add h14 32 (by omega)) 32 (by omega) (by omega)]
-      omega
-    refine st_80006a54 hlive (by rw [e1]; exact hs1) (by rw [e1]; exact hs2) ?_
-    rw [e1]
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    rw [← copyW_succ]
-    refine mm_l32_rest A hlive (R0 := R0) i hi _ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+    have rs : ARgn S s n := ⟨⟨A.sS⟩, A.slo, A.shi⟩; have rd : ARgn S d n := ⟨⟨A.dS⟩, A.dlo, A.dhi⟩
+    have hdhi := A.dhi; have hshi := A.shi; have hd8 := A.d8; have hs8 := A.s8
+    have hb : 32 * i + 32 ≤ n := by have := Nat.mul_div_le n 32; omega
+    have hr : n / 32 - (i + 1) = k := by omega
+    clear hki
+    rgn_step hlive at 0x80006a58
+    cp_norm
+    exact mm_l32_rest A hlive (R0 := R0) i hi _ (by mm_keep hK) h10 (by rgn_arith) h12 (by rgn_arith)
+      h15 h16 h17
       (fun R' hlt hK' g10 g11 g12 g14 g15 g16 g17 =>
-        mm_l32 A hlive hk k (i + 1) R' (by omega) hlt hK' g10 g11 g12 g14 g15 g16 g17) hk
-    · exact ((hK.upd (k := 13) _ (by decide)).upd (k := 11) _ (by decide)).upd (k := 14) _ (by decide)
-    all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact h10
-    · rw [n32, addr_add h11 32 (by omega)]
-    · exact h12
-    · rw [n32, addr_add h14 32 (by omega)]
-    · exact h15
-    · exact h16
-    · exact h17
+        mm_l32 A hlive hk k (i + 1) R' hr hlt hK' g10 g11 g12 g14 g15 g16 g17) hk
 
 theorem mm_l8 {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈ allocText, live p.1)
     {R0 : Nat → BitVec 64} {c w : Nat} (hcw : c + 8 * w ≤ n)
@@ -255,52 +193,25 @@ theorem mm_l8 {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈ a
       AW live S Q 0x80006aac#64 R (copyW M0 d s (c / 8 + j))
   | 0, j, R, hkj, hj, _, _, _, _, _, _ => by omega
   | k + 1, j, R, hkj, hj, hK, h10, h11, h12, h14, h16 => by
-    have hn := A.n32; have hdhi := A.dhi; have hshi := A.shi; have hd8 := A.d8
-    have ej : c / 8 + j = (c + 8 * j) / 8 := by omega
-    obtain ⟨hl1, hl2⟩ := A.ld (a := s + 8 * (c / 8 + j)) (by omega) (by omega)
-    obtain ⟨hs1, hs2⟩ := A.st (a := d + 8 * (c / 8 + j)) (by omega) (by omega) (by omega)
-    have n0 : (sign_extend (m := 64) (0x000#12) : BitVec 64) = BitVec.ofNat 64 0 := rfl
-    have n8 : (sign_extend (m := 64) (0x008#12) : BitVec 64) = BitVec.ofNat 64 8 := rfl
-    have eL : (R 11 + sign_extend (m := 64) (0x000#12)).toNat = s + 8 * (c / 8 + j) := by
-      rw [n0, addr_add h11 0 (by omega)]; omega
-    refine st_80006aac hlive (by rw [eL]; exact hl1) (by rw [eL]; exact hl2) ?_
-    rw [eL]
-    refine st_80006ab0 hlive ?_
-    refine st_80006ab4 hlive ?_
-    have eS : ((upd (upd (upd R 6 (ldv .ld (copyW M0 d s (c / 8 + j)) (s + 8 * (c / 8 + j)))) 17
-        ((upd R 6 (ldv .ld (copyW M0 d s (c / 8 + j)) (s + 8 * (c / 8 + j)))) 11 +
-          (upd R 6 (ldv .ld (copyW M0 d s (c / 8 + j)) (s + 8 * (c / 8 + j)))) 16)) 11
-        ((upd (upd R 6 (ldv .ld (copyW M0 d s (c / 8 + j)) (s + 8 * (c / 8 + j)))) 17
-          ((upd R 6 (ldv .ld (copyW M0 d s (c / 8 + j)) (s + 8 * (c / 8 + j)))) 11 +
-            (upd R 6 (ldv .ld (copyW M0 d s (c / 8 + j)) (s + 8 * (c / 8 + j)))) 16)) 11 +
-          sign_extend (m := 64) (0x008#12))) 17 + sign_extend (m := 64) (0x000#12)).toNat =
-        d + 8 * (c / 8 + j) := by
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    have rs : ARgn S s n := ⟨⟨A.sS⟩, A.slo, A.shi⟩; have rd : ARgn S d n := ⟨⟨A.dS⟩, A.dlo, A.dhi⟩
+    have hdhi := A.dhi; have hshi := A.shi; have hd8 := A.d8; have hs8 := A.s8
+    have e17 : ((R 11).toNat + (R 16).toNat) % 18446744073709551616 = d + c + 8 * j := by
       have h17 : (BitVec.ofNat 64 s).toNat = s := by rw [BitVec.toNat_ofNat]; omega
-      rw [n0, h16, addr_add (add_sub_toNat h11 h10 h17 (by omega) (by omega)) 0 (by omega)]
-      omega
-    refine st_80006ab8 hlive (by rw [eS]; exact hs1) (by rw [eS]; exact hs2) ?_
-    rw [eS]
-    simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    rw [← copyW_succ]
-    have g11 : (R 11 + sign_extend (m := 64) (0x008#12)).toNat = s + c + 8 * (j + 1) := by
-      rw [n8, addr_add h11 8 (by omega)]; omega
-    refine st_80006abc hlive (fun hc => ?_) (fun hc => ?_) <;>
+      rw [← key_toNat_add, h16, add_sub_toNat h11 h10 h17 (by omega) (by omega)]; omega
+    have ej : 8 * (c / 8 + j) = c + 8 * j := by omega
+    rgn_step hlive at 0x80006abc
+    cp_norm
+    have g11 : (R 11 + 8#64).toNat = s + c + 8 * (j + 1) := by rgn_arith
+    refine (step% st 0x80006abc) hlive (fun hc => ?_) (fun hc => ?_) <;>
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
     · have hlt : j + 1 < w := by
         have : j + 1 ≠ w := fun he => hc (BitVec.eq_of_toNat_eq (by rw [g11, h14, ← he]))
         omega
-      exact mm_l8 A hlive hcw hk hc8 k (j + 1) _ (by omega) hlt (by mm_keep hK)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h10)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact g11)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h12)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h14)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h16)
+      exact mm_l8 A hlive hcw hk hc8 k (j + 1) _ (by omega) hlt (by mm_keep hK) h10 g11 h12 h14 h16
     · have heq : j + 1 = w := by
         have := congrArg BitVec.toNat (Decidable.of_not_not hc); rw [g11, h14] at this; omega
       rw [show c / 8 + j + 1 = c / 8 + w by omega]
-      exact hk _ (by mm_keep hK) (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h12)
-        (by simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [g11, heq])
+      exact hk _ (by mm_keep hK) h12 (by rw [← heq]; exact g11)
 
 theorem and24 (n : Nat) (h : n % 8 = 0) : n &&& 24 = n % 32 := by
   have h1 : n &&& 24 = (n % 2 ^ 5) &&& 24 := by
@@ -352,9 +263,9 @@ theorem mm_post {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈
       AW live S Q 0x800069fc#64 R' M := by
     intro R' M hK' h0' hM
     subst hM
-    refine st_800069fc hlive ?_
-    refine st_80006a00 hlive (fun _ => ?_) (fun hc => absurd ?_ hc)
-    · refine st_80006ae0 hlive (by rw [upd_other _ _ (by decide), hK'.ra]; exact hra) ?_
+    refine (step% st 0x800069fc) hlive ?_
+    refine (step% st 0x80006a00) hlive (fun _ => ?_) (fun hc => absurd ?_ hc)
+    · refine (step% st 0x80006ae0) hlive (by rw [upd_other _ _ (by decide), hK'.ra]; exact hra) ?_
       rw [upd_other _ _ (by decide), hK'.ra]
       exact hk _ (by mm_keep hK')
     · simp only [upd_apply, Nat.reduceEqDiff, ite_false]; exact h0'
@@ -370,12 +281,12 @@ theorem mm_post {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p ∈
   have e31 : (R 12 &&& 31#64).toNat = n % 32 := by
     rw [show (31#64 : BitVec 64) = BitVec.ofNat 64 (2 ^ 5 - 1) from rfl, andm_toNat _ _ (by decide),
       h12, Nat.and_two_pow_sub_one_eq_mod]
-  refine st_80006a94 hlive (fun hc => ?_) (fun hc => ?_) <;>
+  refine (step% st 0x80006a94) hlive (fun hc => ?_) (fun hc => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
   ·
     have h32 : n % 32 = 0 := by rw [← e24, hc]; rfl
-    refine st_80006ae4 hlive ?_
-    refine st_80006ae8 hlive ?_
+    refine (step% st 0x80006ae4) hlive ?_
+    refine (step% st 0x80006ae8) hlive ?_
     refine hret _ _ (by mm_keep hK) ?_ ?_
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; sx_norm
       apply BitVec.eq_of_toNat_eq; rw [e31, h32]; rfl
@@ -426,8 +337,8 @@ theorem memmove_fwd {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p
     have k11 : (R' 11).toNat = s := by rw [g11, h11]
     have k12 : (R' 12).toNat = n := by rw [g12, h12]
     clear g10 g11 g12
-    refine st_800069f0 hlive ?_
-    refine st_800069f4 hlive (fun _ => ?_) (fun hc => absurd ?_ hc)
+    refine (step% st 0x800069f0) hlive ?_
+    refine (step% st 0x800069f4) hlive (fun _ => ?_) (fun hc => absurd ?_ hc)
     rotate_left
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [k12]
       show 31 < n; omega
@@ -436,7 +347,7 @@ theorem memmove_fwd {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p
       apply BitVec.eq_of_toNat_eq
       rw [show (7#64 : BitVec 64) = BitVec.ofNat 64 (2 ^ 3 - 1) from rfl, andm_toNat _ _ (by decide),
         Nat.and_two_pow_sub_one_eq_mod, BitVec.toNat_or, k10, k11, or8 d s hd8 hs8]; rfl
-    refine st_80006a30 hlive (fun hc => absurd ?_ hc) (fun _ => ?_)
+    refine (step% st 0x80006a30) hlive (fun hc => absurd ?_ hc) (fun _ => ?_)
     · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hal
     sx_run [5] hlive at 0x80006a48
     have hq1 : 1 ≤ n / 32 := by omega
@@ -454,10 +365,10 @@ theorem memmove_fwd {M0 : Mem} {d s n : Nat} (A : MMArgs S d s n) (hlive : ∀ p
     · rw [BitVec.toNat_add, e15]; simp; omega
     · rw [BitVec.toNat_add, k10, e16, Nat.mod_eq_of_lt (by omega)]
     · exact k11
-  refine st_800069c4 hlive (fun _ => hfwd R (MMKeep.refl R) rfl rfl rfl) (fun hc => ?_)
+  refine (step% st 0x800069c4) hlive (fun _ => hfwd R (MMKeep.refl R) rfl rfl rfl) (fun hc => ?_)
   rw [h10, h11] at hc
-  refine st_800069c8 hlive ?_
-  refine st_800069cc hlive (fun _ => hfwd _ (by mm_keep (MMKeep.refl R)) ?_ ?_ ?_) (fun hc' => ?_) <;>
+  refine (step% st 0x800069c8) hlive ?_
+  refine (step% st 0x800069cc) hlive (fun _ => hfwd _ (by mm_keep (MMKeep.refl R)) ?_ ?_ ?_) (fun hc' => ?_) <;>
     try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
   · exfalso
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc'

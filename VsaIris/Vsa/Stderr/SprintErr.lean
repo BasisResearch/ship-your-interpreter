@@ -1,10 +1,11 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Stderr.FwriteRun
 import VsaIris.Vsa.Fprintf.Tac
 
 namespace VsaIris.Sym
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 structure SprintPost (Mt Mt' : Mem) (sp : BitVec 64) : Prop where
   frame : ∀ a, ¬ (sp.toNat - 256 ≤ a ∧ a < sp.toNat) → ¬ (sp.toNat + 232 ≤ a ∧ a < sp.toNat + 248) →
@@ -52,7 +53,7 @@ macro "sprint_mid" : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk
       (outS s need) Q (t ++ putcs bs) ra R' Mt') :
     SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs (outS s need) Q t
       0x8000e8cc#64 R Mt by
-  sprint_step
+  nx_win sp 256 592; sprint_step
 
 #ix_piece sprintErr_02 from sprintErr_01 by
   sprint_step

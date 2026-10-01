@@ -1,4 +1,5 @@
 import VsaIris.Vsa.ReallocTail
+import VsaIris.Vsa.HeapPermit
 
 namespace VsaIris.VsaHeap
 
@@ -37,45 +38,28 @@ theorem realloc_dec {C : MCtx} {B : RB} (O : ROK C B) {R : Nat → BitVec 64} {M
   obtain ⟨X, S, ci⟩ := c
   simp only at hu hca hcn
   subst hu
-  have hXb := HH.walk.chunk_bounds _ hc
-  have hx16 := HH.aligned.1 _ hc
-  have hS16 := (walk_sizes HH.walk _ hc).1
-  simp only at hXb hx16 hS16
-  have hbrk := HH.brk_le; have htle := HH.top_le
-  unfold heapStart heapEnd at *
-  obtain ⟨hdr0, hdr, hsz, hlow⟩ := walk_header HH.walk _ hc
-  simp only at hdr hsz
+  have Xk := (Hp.heap.heap.chunkK hc).lower
+  open_fields Xk
+  obtain ⟨hdr0, hdr, hsz, hlow⟩ := Xk_hdrv
   have hdrlt := Vsa.Sim.read64_lt _ _ _ hdr
-  have hlo := O.sp.lo; unfold mHead Vsa.Sim.tohostAddr at hlo
-  have hhf : ∀ k, k < 8 → vsaFoot C.H (X + 8 + k) := fun k hk =>
-    vsaFoot_cons_sub _ (foot_header Hp.heap.heap (.inr ⟨_, hc, rfl⟩) k hk)
-  have hE8 : (R 8 + sign_extend (m := 64) (0xff8#12)).toNat = X + 8 := by
-    sx_norm; rw [BitVec.toNat_add, h8, ← hca]; simp; omega
-  refine st_800052e0 O.live (by rw [hE8]; unfold LdOK Vsa.Sim.tohostAddr; omega)
-    (by rw [hE8]; exact O.foot hhf) ?_
-  rw [hE8, ldv_at hdr _ rfl]
-  refine st_800052e4 O.live ?_
-  refine st_800052e8 O.live ?_
-  have hX : (R 8 + sign_extend (m := 64) (0xff0#12)).toNat = X := by
-    sx_norm; rw [BitVec.toNat_add, h8, ← hca]; simp; omega
-  have hSv : (BitVec.ofNat 64 hdr0 &&& sign_extend (m := 64) (0xffc#12)).toNat = S := by
-    rw [show (sign_extend (m := 64) (0xffc#12) : BitVec 64) = 18446744073709551612#64 from rfl,
-      toNat_and_m4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hdrlt, ← hsz]; rfl
+  rgn_run O.live at 0x800052e4
+  rgn_ld [hdr]
+  rgn_run O.live at 0x800052ec
+  have hX : (R 8 + 18446744073709551600#64).toNat = X := by rgn_arith
+  have hSv : (BitVec.ofNat 64 hdr0 &&& 18446744073709551612#64).toNat = S := by
+    rw [toNat_and_m4, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hdrlt, ← hsz]; rfl
   have hnbP := hnb.eq
   have hnbv : C.n.toNat + 8 ≤ nb := by rw [hnbP]; unfold physSize; omega
-  have h14 : (BitVec.ofNat 64 hdr0 &&& sign_extend (m := 64) (0xffc#12)).toInt = (S : Int) :=
+  have h14 : (BitVec.ofNat 64 hdr0 &&& 18446744073709551612#64).toInt = (S : Int) :=
     toInt_small hSv (by omega)
   have h15' : (R 15).toInt = (nb : Int) := toInt_small h15 (by omega)
-  refine st_800052ec O.live (fun hcmp => ?_) (fun hcmp => ?_) <;>
+  refine (step% st 0x800052ec) O.live (fun hcmp => ?_) (fun hcmp => ?_) <;>
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, h14, h15', Int.ofNat_le] at hcmp
   ·
     obtain ⟨cs₁, cs₂, hsplit⟩ := List.append_of_mem hc
     have Hr := Hp.heap.reblock hc rfl hca (n' := C.n.toNat) (show C.n.toNat + 8 ≤ S by omega)
     rw [hsplit, ← hca] at Hr
-    have hw := HH.walk
-    rw [hsplit] at hw
-    obtain ⟨⟨hn, hnr, hnp⟩, _⟩ := walk_next_of hw
-    simp only at hnr hnp
+    obtain ⟨hn, hnr, hnp⟩ := Xk_nhdrv
     have hodd : hn % 2 = 1 := by unfold prevInuse at hnp; simpa using hnp
     have hhdr : hdr0 = S + hdr0 % 2 := by unfold chunkSize at hsz; omega
     have hp := Hp.grow

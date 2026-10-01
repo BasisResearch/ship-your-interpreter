@@ -1,5 +1,4 @@
 import Vsa.Sim.MemcpySites4
-import Vsa.Sim.DivSpec
 import Vsa.Sim.MemcpySpec2
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa

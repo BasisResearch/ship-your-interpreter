@@ -1,9 +1,10 @@
+import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Digits
 
 namespace VsaIris.Sym.Fp
 
 open Vsa.Sim Vsa.MemRepr VsaIris.Sym VsaIris.Interp VsaIris.MallocFast VsaIris.Stdio Vsa.While
-open scoped VsaIris.Sym.Stdout
+open scoped VsaIris.Sym.Stdout VsaIris.Sym.Win
 
 variable {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
@@ -77,7 +78,7 @@ theorem zero_le_toInt_iff (v : BitVec 64) : ((0#64).toInt ≤ v.toInt) = ¬ isNe
     (hk : ∀ R' Mt', LldHead R R' Mt Mt' sp ap v →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000b414#64 R' Mt') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000a9fc#64 R Mt by
-  have hDA := hF.fmtDA; have hDT := hF.tabDA
+  nx_win sp 1024 592; have hDA := hF.fmtDA; have hDT := hF.tabDA
   have hf1 := hF.l1; have hf2 := hF.l2; have hf3 := hF.d; have htl := hF.tabL; have htd := hF.tabD
   nf_go 1 [14] hlive using [h2, h25, hap, hv, hf1, hf2, hf3, htl, htd, BitVec.add_assoc,
     ofNat_add_ofNat] at 2147529708
@@ -151,7 +152,7 @@ theorem lldMag_small (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : 
     (hk : ∀ R' Mt', LldMag R R' Mt Mt' sp m →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000b444#64 R' Mt') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000b414#64 R Mt := by
-  have hb : (m.toNat ≤ 9) = True := eq_true hm9
+  nx_win sp 1024 592; have hb : (m.toNat ≤ 9) = True := eq_true hm9
   have hmw : m = BitVec.ofNat 64 m.toNat := by simp
   have hdw : BitVec.signExtend 64 (BitVec.extractLsb 31 0 (m + 48#64)) =
       BitVec.zeroExtend 64 (BitVec.ofNat 8 (48 + m.toNat)) := by
@@ -199,7 +200,7 @@ theorem lldMag_big (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
     (hk : ∀ R' Mt', LldMag R R' Mt Mt' sp m →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000b444#64 R' Mt') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000b414#64 R Mt := by
-  have hb : (m.toNat ≤ 9) = False := eq_false hm9
+  nx_win sp 1024 592; have hb : (m.toNat ≤ 9) = False := eq_false hm9
   nx_run hlive using [h2, h26, h22, h28, h29, hb] at 2147535488
   have e348 : sp + 348#64 = BitVec.ofNat 64 (sp.toNat + 348) := by
     apply BitVec.eq_of_toNat_eq; rw [sp_lit (by omega), BitVec.toNat_ofNat]; omega
@@ -262,7 +263,7 @@ theorem lld_mag (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ inte
     (hk : ∀ R' Mt', LldMag R R' Mt Mt' sp m →
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000b444#64 R' Mt') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000b414#64 R Mt := by
-  by_cases hm9 : m.toNat ≤ 9
+  nx_win sp 1024 592; by_cases hm9 : m.toNat ≤ 9
   · exact lldMag_small hlive hs1 hs2 hs3 hs4 hal h2 h26 h22 hm9 fun R' Mt' h =>
       hk R' Mt' h
   · exact lldMag_big hlive hlive' hsub hs1 hs2 hs3 hs4 hal h2 h26 h22 h28 h29 hm9 hk

@@ -2,14 +2,7 @@ import Vsa.Sim.StepObs
 import Vsa.Sim.ExecuteAlu
 import Vsa.Sim.ExecuteBranch
 import Vsa.Sim.RegAccess
-import Vsa.Sim.DecodeTable.Batch01Part01
-import Vsa.Sim.DecodeTable.Batch01Part04
-import Vsa.Sim.DecodeTable.Batch01Part15
-import Vsa.Sim.DecodeTable.Batch01Part23
-import Vsa.Sim.DecodeTable.Batch02Part23
-import Vsa.Sim.DecodeTable.Batch02Part24
-import Vsa.Sim.DecodeTable.Batch04Part09
-import Vsa.Sim.DecodeTable.Batch16Part09
+import Vsa.Sim.DecodeNF
 import Vsa.Sim.Code.«__muldi3»
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
@@ -62,7 +55,7 @@ theorem site_80004640
     (instruction.ITYPE (0x000#12, regidx.Regidx 0x0a#5, regidx.Regidx 0x0c#5, iop.ADDI))
     Register.x12 (v10 + sign_extend (m := 64) (0x000#12)) (0x13#8) (0x06#8) (0x05#8) (0x00#8)
     hG hpc hminstret mv_a2_a0_word mv_a2_a0_notrvc
-    (Vsa.Sim.DecodeTable.decode_00050613 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00050613#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -105,7 +98,7 @@ theorem site_80004644
     (instruction.ITYPE (0x000#12, regidx.Regidx 0x00#5, regidx.Regidx 0x0a#5, iop.ADDI))
     Register.x10 ((0#64) + sign_extend (m := 64) (0x000#12)) (0x13#8) (0x05#8) (0x00#8) (0x00#8)
     hG hpc hminstret li_a0_0_word li_a0_0_notrvc
-    (Vsa.Sim.DecodeTable.decode_00000513 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00000513#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -152,7 +145,7 @@ theorem site_80004648
     (instruction.ITYPE (0x001#12, regidx.Regidx 0x0b#5, regidx.Regidx 0x0d#5, iop.ANDI))
     Register.x13 (v11 &&& sign_extend (m := 64) (0x001#12)) (0x93#8) (0xf6#8) (0x15#8) (0x00#8)
     hG hpc hminstret andi_a3_a1_word andi_a3_a1_notrvc
-    (Vsa.Sim.DecodeTable.decode_0015f693 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x0015f693#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -201,7 +194,7 @@ theorem site_80004650
     (instruction.RTYPE (regidx.Regidx 0x0c#5, regidx.Regidx 0x0a#5, regidx.Regidx 0x0a#5, rop.ADD))
     Register.x10 (v10 + v12) (0x33#8) (0x05#8) (0xc5#8) (0x00#8)
     hG hpc hminstret add_a0_a0_a2_word add_a0_a0_a2_notrvc
-    (Vsa.Sim.DecodeTable.decode_00c50533 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00c50533#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -250,7 +243,7 @@ theorem site_80004654
     Register.x11 (shift_bits_right v11 (Sail.BitVec.extractLsb (0x01#6) 5 0))
     (0x93#8) (0xd5#8) (0x15#8) (0x00#8)
     hG hpc hminstret srli_a1_a1_word srli_a1_a1_notrvc
-    (Vsa.Sim.DecodeTable.decode_0015d593 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x0015d593#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -299,7 +292,7 @@ theorem site_80004658
     Register.x12 (shift_bits_left v12 (Sail.BitVec.extractLsb (0x01#6) 5 0))
     (0x13#8) (0x16#8) (0x16#8) (0x00#8)
     hG hpc hminstret slli_a2_a2_word slli_a2_a2_notrvc
-    (Vsa.Sim.DecodeTable.decode_00161613 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00161613#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -362,7 +355,7 @@ theorem site_8000464c_taken
     (regidx.Regidx 0x0d#5) (regidx.Regidx 0x00#5) bop.BEQ (0x00068463#32)
     (0x63#8) (0x84#8) (0x06#8) (0x00#8)
     hG hpc hminstret beqz_a3_word beqz_a3_notrvc
-    (Vsa.Sim.DecodeTable.decode_00068463 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00068463#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -385,7 +378,7 @@ theorem site_8000464c_nottaken
     (regidx.Regidx 0x0d#5) (regidx.Regidx 0x00#5) bop.BEQ (0x00068463#32)
     (0x63#8) (0x84#8) (0x06#8) (0x00#8)
     hG hpc hminstret beqz_a3_word beqz_a3_notrvc
-    (Vsa.Sim.DecodeTable.decode_00068463 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00068463#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -447,7 +440,7 @@ theorem site_8000465c_taken
     (regidx.Regidx 0x0b#5) (regidx.Regidx 0x00#5) bop.BNE (0xfe0596e3#32)
     (0xe3#8) (0x96#8) (0x05#8) (0xfe#8)
     hG hpc hminstret bnez_a1_word bnez_a1_notrvc
-    (Vsa.Sim.DecodeTable.decode_fe0596e3 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0xfe0596e3#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -470,7 +463,7 @@ theorem site_8000465c_nottaken
     (regidx.Regidx 0x0b#5) (regidx.Regidx 0x00#5) bop.BNE (0xfe0596e3#32)
     (0xe3#8) (0x96#8) (0x05#8) (0xfe#8)
     hG hpc hminstret bnez_a1_word bnez_a1_notrvc
-    (Vsa.Sim.DecodeTable.decode_fe0596e3 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0xfe0596e3#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))
@@ -509,7 +502,7 @@ theorem site_80004660
     (regidx.Regidx 0x01#5) (0x67#8) (0x80#8) (0x00#8) (0x00#8)
     hG hpc hminstret hb0 hb1 hb2 hb3 (by decide) (by decide) (by decide)
     ret_notrvc ret_word
-    (Vsa.Sim.DecodeTable.decode_00008067 (afterPrelude σ)
+    (Vsa.Sim.decodeW (w := 0x00008067#32) (afterPrelude σ)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.misa)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.cur_privilege)
       (by rw [get?_afterPrelude σ _ (by decide)]; exact hG.mseccfg))

@@ -1,5 +1,6 @@
 import VsaIris.Interp.LeafCalls
 import VsaIris.Interp.SpecEnv
+import VsaIris.Interp.SymInterp
 
 namespace VsaIris.Interp
 
@@ -17,7 +18,7 @@ open Vsa.MemRepr Vsa.Sim
     (hk : ldv .lw m aX.toNat = 4#64) (hku : ldv .lwu m aX.toNat = 4#64) :
     IW live m (leafView aX.toNat 8)
     (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) Q 0x80003164#64 R Mt
-  by ix_run hlive using [h10, h11, h12, h13, h2, hk, hku, hsf] at 0x80003440
+  by sym_run hlive using [h10, h11, h12, h13, h2, hk, hku, hsf] at 0x80003440
 
 #ix_seg VarT_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -39,7 +40,7 @@ open Vsa.MemRepr Vsa.Sim
     (hS2 : ldv .ld Mt (s + 18446744073709550528#64 + 1056#64).toNat = v18) :
     IW live m (leafView aX.toNat 8)
     (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b) Q 0x80003448#64 R Mt
-  by ix_run hlive using [h9, h2, hW0, hW1, hW2, hRA, hS0, hS1, hS2, hsf, hal, e8, e16]
+  by sym_run hlive using [h9, h2, hW0, hW1, hW2, hRA, hS0, hS1, hS2, hsf, hal, e8, e16]
 
 open Iris Iris.BI Iris.Std Iris.ProgramLogic Iris.ProofMode
 open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
@@ -131,8 +132,8 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
     %(getSaved.map fun j => (j, R1 j)) %(by simp [getSaved])
   ihave #Hx := strAt_of_cstringWithin hfs.str (sharedWin_of_readOK hgeo) $$ Hro
   iapply ms_callEnv3 (twpW _) (i := 0x80003440) (entry := envGetPC) (R := R1)
-    (jalx_80003440 live (fun p hp => hlive _ (interp_code_80003440 p hp)))
-    interp_code_80003440 (by decide)
+    ((step% jalx 0x80003440) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
+    (interp_code (by decide)) (by decide)
     (φ := EnvSp (R1 2) envGetNeed ∧ SlotWin (R1 12).toNat)
     ⟨⟨(by rw [e2, hsf]; unfold htifLo envGetNeed; unfold Vsa.Sim.tohostAddr at *; omega),
        (by rw [e2, hsf]; omega), (by rw [e2, hsf]; omega)⟩,
@@ -176,7 +177,7 @@ open VsaIris.Inst Vsa.While Vsa.RuntimeRepr
     · iexact Hbw
   intro F'
 
-  refine it_80003444 hlive (fun hc => by
+  refine (step% it 0x80003444) hlive (fun hc => by
     simp only [upd_apply, Nat.reduceEqDiff, ite_false] at hc; rw [hres] at hc; exact absurd hc (by decide))
     (fun hnz => ?_)
   refine VarT_run2 (aX := aX) (s := s) (sret := sret) (ret := ret) (v8 := rv 8) (v9 := rv 9)

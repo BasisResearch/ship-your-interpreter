@@ -1,6 +1,6 @@
 import VsaIris.Vsa.BinImg
 import VsaIris.Vsa.JalSite
-import Vsa.Sim.OutputAliasDecode
+import Vsa.Sim.DecodeNF
 
 namespace VsaIris.Newlib.Sites
 
@@ -34,7 +34,7 @@ def exitJalExitE : JalSite where
 theorem exitJalExitE_cert : exitJalExitE.Cert where
   word := by decide
   notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.DecodeTable.decode_9f5fb0ef σ h1 h2 h3
+  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x9f5fb0ef#32) σ h1 h2 h3
   tgt := by decide
   tgt_align := by decide
   lo := by decide
@@ -42,12 +42,6 @@ theorem exitJalExitE_cert : exitJalExitE.Cert where
   align := by decide
 
 end VsaIris.Newlib.Sites
-
-namespace Vsa.Sim.DecodeTable
-
-alias decode_72c0406f := Vsa.Sim.OutputAliasDecode.decode_72c0406f
-
-end Vsa.Sim.DecodeTable
 
 namespace VsaIris.Newlib.Sites
 
@@ -307,7 +301,7 @@ def mainJalFprintf : JalSite where
 theorem mainJalFprintf_cert : mainJalFprintf.Cert where
   word := by decide
   notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.DecodeTable.decode_3ad010ef σ h1 h2 h3
+  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x3ad010ef#32) σ h1 h2 h3
   tgt := by decide
   tgt_align := by decide
   lo := by decide
@@ -588,7 +582,7 @@ def rtJalSnprintf1 : JalSite where
 theorem rtJalSnprintf1_cert : rtJalSnprintf1.Cert where
   word := by decide
   notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.DecodeTable.decode_67d020ef σ h1 h2 h3
+  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x67d020ef#32) σ h1 h2 h3
   tgt := by decide
   tgt_align := by decide
   lo := by decide
@@ -608,7 +602,7 @@ def rtJalSnprintf2 : JalSite where
 theorem rtJalSnprintf2_cert : rtJalSnprintf2.Cert where
   word := by decide
   notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.DecodeTable.decode_661020ef σ h1 h2 h3
+  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x661020ef#32) σ h1 h2 h3
   tgt := by decide
   tgt_align := by decide
   lo := by decide
@@ -628,7 +622,7 @@ def rtJalLongjmp : JalSite where
 theorem rtJalLongjmp_cert : rtJalLongjmp.Cert where
   word := by decide
   notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.DecodeTable.decode_24c040ef σ h1 h2 h3
+  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x24c040ef#32) σ h1 h2 h3
   tgt := by decide
   tgt_align := by decide
   lo := by decide
@@ -775,7 +769,7 @@ def topJalRet : JalSite where
 theorem topJalRet_cert : topJalRet.Cert where
   word := by decide
   notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.DecodeTable.decode_6ec010ef σ h1 h2 h3
+  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x6ec010ef#32) σ h1 h2 h3
   tgt := by decide
   tgt_align := by decide
   lo := by decide
@@ -795,7 +789,7 @@ def topJalBrk : JalSite where
 theorem topJalBrk_cert : topJalBrk.Cert where
   word := by decide
   notrvc := by decide
-  dec := fun σ h1 h2 h3 => Vsa.Sim.DecodeTable.decode_6c8010ef σ h1 h2 h3
+  dec := fun σ h1 h2 h3 => Vsa.Sim.decodeW (w := 0x6c8010ef#32) σ h1 h2 h3
   tgt := by decide
   tgt_align := by decide
   lo := by decide

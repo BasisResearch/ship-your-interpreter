@@ -1,28 +1,10 @@
-import Vsa.Sim.StepObs
-import Vsa.Sim.ExecuteAlu
-import Vsa.Sim.ExecuteBranch
-import Vsa.Sim.ExecuteLoad
-import Vsa.Sim.ExecuteStore
-import Vsa.Sim.MemStore
-import Vsa.Sim.RegAccess
-import Vsa.Sim.DecodeTable.Batch01Part19
-import Vsa.Sim.DecodeTable.Batch01Part25
-import Vsa.Sim.DecodeTable.Batch01Part26
-import Vsa.Sim.DecodeTable.Batch03Part22
-import Vsa.Sim.DecodeTable.Batch03Part24
-import Vsa.Sim.DecodeTable.Batch05Part23
-import Vsa.Sim.DecodeTable.Batch07Part02
-import Vsa.Sim.DecodeTable.Batch16Part13
-import Vsa.Sim.DecodeTable.Batch16Part18
-import Vsa.Sim.Code.Memcpy
-import Vsa.Sim.DivSites
 import Vsa.Sim.MemcpySites
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register
 open Sail.ConcurrencyInterfaceV1.PreSail
 open Vsa.Machine (MState)
-open Vsa.Sim.Code (MemcpyLoaded memcpy_at_80006bfc memcpy_at_80006c00 memcpy_at_80006c04 memcpy_at_80006c08 memcpy_at_80006c0c memcpy_at_80006c10 memcpy_at_80006c14 memcpy_at_80006c18 memcpy_at_80006c38)
+open Vsa.Sim.Code (MemcpyLoaded)
 
 set_option maxHeartbeats 8000000
 set_option maxRecDepth 1000000

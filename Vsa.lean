@@ -110,7 +110,6 @@ import Vsa.Sim.Boot.Gen.For
 import Vsa.Sim.Boot.Gen.Functions1
 import Vsa.Sim.Boot.Gen.Functions2
 import Vsa.Sim.Boot.Gen.Proof
-import Vsa.Sim.Boot.Gen.Recursion
 import Vsa.Sim.Boot.Gen.Scope
 import Vsa.Sim.Boot.Gen.Strings
 import Vsa.Sim.Boot.Gen.While

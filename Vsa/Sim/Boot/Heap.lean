@@ -118,6 +118,54 @@ theorem mem_binIdxs {i : Nat} (h0 : 0 < i) (h1 : i < numBins) : i ∈ binIdxs :=
   simp only [List.mem_map, List.mem_range]
   exact ⟨i - 1, by omega, by omega⟩
 
+def extIn (e : Nat × Nat) (c : Chunk) : Bool :=
+  c.inuse && Nat.ble (c.addr + 16) e.1 && Nat.ble (e.1 + e.2) (c.addr + c.size + 8)
+
+/-- The first suffix of `cs` whose head holds `e`. -/
+def seekExt (e : Nat × Nat) : List Chunk → Option (List Chunk)
+  | [] => none
+  | c :: cs => bif extIn e c then some (c :: cs) else seekExt e cs
+
+theorem seekExt_sound {e : Nat × Nat} : ∀ {cs cs' : List Chunk}, seekExt e cs = some cs' →
+    (∃ c ∈ cs, extIn e c = true) ∧ ∀ c ∈ cs', c ∈ cs
+  | [], _, h => by cases h
+  | c :: cs, cs', h => by
+    simp only [seekExt] at h
+    cases hb : extIn e c with
+    | true =>
+      rw [hb, Bool.cond_true] at h
+      cases h
+      exact ⟨⟨c, List.mem_cons_self, hb⟩, fun _ h => h⟩
+    | false =>
+      rw [hb, Bool.cond_false] at h
+      obtain ⟨⟨c', hc', he⟩, hsub⟩ := seekExt_sound h
+      exact ⟨⟨c', List.mem_cons_of_mem _ hc', he⟩, fun x hx => List.mem_cons_of_mem _ (hsub x hx)⟩
+
+/-- Every extent lies in a live chunk of `full`. The cursor `cs` walks `full` forward, so
+extents in address order cost one pass; an extent behind the cursor restarts it. -/
+def extsCur (full : List Chunk) : List (Nat × Nat) → List Chunk → Bool
+  | [], _ => true
+  | e :: es, cs =>
+    match seekExt e cs with
+    | some cs' => extsCur full es cs'
+    | none => full.any (extIn e) && extsCur full es full
+
+theorem extsCur_sound {full : List Chunk} : ∀ {es : List (Nat × Nat)} {cs : List Chunk},
+    (∀ c ∈ cs, c ∈ full) → extsCur full es cs = true → ∀ e ∈ es, ∃ c ∈ full, extIn e c = true
+  | [], _, _, _, e, he => absurd he List.not_mem_nil
+  | e :: es, cs, hsub, h, e', he' => by
+    simp only [extsCur] at h
+    split at h
+    · rename_i cs' hs
+      obtain ⟨⟨c, hc, hce⟩, hsub'⟩ := seekExt_sound hs
+      rcases List.mem_cons.mp he' with rfl | he'
+      · exact ⟨c, hsub c hc, hce⟩
+      · exact extsCur_sound (fun x hx => hsub x (hsub' x hx)) h e' he'
+    · rw [Bool.and_eq_true] at h
+      rcases List.mem_cons.mp he' with rfl | he'
+      · exact List.any_eq_true.mp h.1
+      · exact extsCur_sound (fun c hc => hc) h.2 e' he'
+
 def heapCheck (v : Nat → Option (BitVec 8)) (exts exact : List (Nat × Nat)) (top brkv : Nat)
     (chunks : List Chunk) (L : List (List Nat)) : Bool :=
   r64 v sbrkBaseAddr == some heapStart &&
@@ -145,8 +193,7 @@ def heapCheck (v : Nat → Option (BitVec 8)) (exts exact : List (Nat × Nat)) (
   (match r64 v binblocksAddr with
    | some bb => binIdxs.all fun i => i ≤ 1 || (binsOf L i).isEmpty || bb / 2 ^ (i / 4) % 2 == 1
    | none => false) &&
-  exts.all (fun e => chunks.any fun c =>
-    c.inuse && decide (c.addr + 16 ≤ e.1) && decide (e.1 + e.2 ≤ c.addr + c.size + 8)) &&
+  extsCur chunks exts chunks &&
   exact.all (fun e => chunks.any fun c =>
     c.inuse && c.addr + 16 == e.1 && decide (e.2 + 8 ≤ c.size))
 
@@ -247,8 +294,8 @@ theorem heapAt_of_check {m : Mem} {v : Nat → Option (BitVec 8)} (h : PartialVi
       · exact absurd h' hne
       · exact h'
   · intro e he
-    obtain ⟨c, hc, hce⟩ := List.any_eq_true.mp (List.all_eq_true.mp hlive e he)
-    simp only [Bool.and_eq_true, decide_eq_true_eq] at hce
+    obtain ⟨c, hc, hce⟩ := extsCur_sound (fun c hc => hc) hlive e he
+    simp only [extIn, Bool.and_eq_true, Nat.ble_eq] at hce
     exact ⟨c, hc, hce.1.1, hce.1.2, hce.2⟩
   · intro e he hre
     obtain ⟨c, hc, hce⟩ := List.any_eq_true.mp (List.all_eq_true.mp hexact e (hr e he hre))

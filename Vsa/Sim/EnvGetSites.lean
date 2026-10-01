@@ -1,7 +1,6 @@
 import Vsa.Sim.ValueSites
 import Vsa.Sim.Code.Env_get
-import Vsa.Sim.DecodeTable.Batch16Part01
-import Vsa.Sim.DecodeTable.Batch09Part17
+import Vsa.Sim.DecodeNF
 
 open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail ConcurrencyInterfaceV1 Vsa
 open Register

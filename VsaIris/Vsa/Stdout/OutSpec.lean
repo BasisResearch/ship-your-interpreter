@@ -137,16 +137,6 @@ theorem ret_regs (r s : BitVec 64) (cs rv : Nat → BitVec 64) (h32 : rv 32 = r)
 
 end Regs
 
-theorem stdioText_img :
-    stdioText.all (fun p => decide (textDom p.1) && textByte p.1 == p.2) = true := by
-  decide +kernel
-
-theorem stdioText_img_mem : ∀ p ∈ stdioText, textDom p.1 ∧ textByte p.1 = p.2 := by
-  intro p hp
-  have h := List.all_eq_true.1 stdioText_img p hp
-  simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
-  exact h
-
 theorem stdioText_live {live : Nat → Prop} (h : CodeLive live) : ∀ p ∈ stdioText, live p.1 :=
   fun p hp => h _ (stdioText_img_mem p hp).1
 
