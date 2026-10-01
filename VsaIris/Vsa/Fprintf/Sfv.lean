@@ -1,6 +1,7 @@
 import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.SbFile
 import VsaIris.Vsa.Fprintf.Arith
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym.Fp
 
@@ -70,12 +71,10 @@ theorem sfv_tail (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
   nx_run hlive using [h8, h18, h19, h20, h22, hres, hfl, hp, e1, e2, ofNat_add_ofNat,
     BitVec.add_assoc] at 2147540928 2147541812
   · rename_i hb; rsimp at hb
-    refine hkX ?_ _ (by keep_chain hkeep)
+    refine hkX ?_ _ (by carry_close [hkeep])
     have := congrArg BitVec.toNat hb; simp only [BitVec.toNat_ofNat] at this; omega
   · rename_i hb; rsimp at hb
-    refine hkH (fun e => hb (by rw [e, Nat.sub_self])) _ ⟨?_, ?_, ?_, ?_, ?_, by keep_chain hkeep⟩
-    all_goals rsimp
-    all_goals first | exact h9 | (rw [ldv_ld_miss _ _ (by nx_addr)]; exact hp)
+    refine hkH (fun e => hb (by rw [e, Nat.sub_self])) _ ⟨?_, ?_, ?_, ?_, ?_, ?_⟩ <;> carry_close [h9, hp, hkeep]
 
 theorem sfv_fetch (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
     {R Rh : Nat → BitVec 64} {s f U sp P : BitVec 64} {need nxt src src' L' : Nat}
@@ -94,9 +93,7 @@ theorem sfv_fetch (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem
       BitVec.ofNat 64 nxt := by rw [show LeanRV64DExecutable.Functions.sign_extend (m := 64) (0x000#12) = 0#64 by decide, BitVec.add_zero]
   refine (step% it 0x8000dfc0) hlive (fun _ => ?_) (fun hc => absurd (by rw [h19]) hc)
   nx_run hlive using [h9, h19, e0, hs, hl, ofNat_add_ofNat] at 2147540928
-  refine hk _ ⟨?_, ?_, ?_, ?_, ?_, by keep_chain hR.keep⟩
-  all_goals rsimp
-  all_goals first | exact hR.p | exact hR.flags
+  refine hk _ ⟨?_, ?_, ?_, ?_, ?_, ?_⟩ <;> carry_close [hR.p, hR.flags, hR.keep]
 
 structure SfvSpills (M : Mem) (fp : BitVec 64) (R0 : Nat → BitVec 64) : Prop where
   ra : ldv .ld M (fp + 88#64).toNat = R0 1
@@ -122,17 +119,7 @@ theorem sfv_exit (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000e334#64 R Mt := by
   obtain ⟨e1, e8, e9, e18, e19, e20, e21, e22, e23, e24, e25⟩ := hsp
   nx_run hlive using [h2, e1, e8, e9, e18, e19, e20, e21, e22, e23, e24, e25, BitVec.add_assoc]
-  refine hk _ (retOK_of (by rsimp) ?_)
-  intro x hx h32 h10 hc
-  simp only [iRegs, callClob, List.mem_cons, List.not_mem_nil, or_false, not_or] at hx hc
-  rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-  all_goals first
-    | (rsimp; done)
-    | (rsimp; first | rfl | assumption | exact h0.symm)
-    | (exfalso; simp at hc; done)
-    | (exfalso; simp at h32; done)
-    | (exfalso; simp at h10; done)
+  exact hk _ (retOK_of (by rsimp) (by ret_keep))
 
 theorem sfv_copyA (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem}
     {R Rh : Nat → BitVec 64} {s f U fp : BitVec 64} {need nxt k L src : Nat}
@@ -158,10 +145,8 @@ theorem sfv_copyA (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Mem
     Nat.reduceMod] at *)
   all_goals first
     | (exfalso; omega)
-    | (refine hkm _ (by rsimp) (by rsimp) ?_ ?_ (by rsimp)
-          ⟨by rsimp; exact hR.nxt, by rsimp; exact hR.len, by rsimp; exact hR.src, by rsimp; exact hR.p,
-            by rsimp; exact hR.flags, by keep_chain hR.keep⟩ <;>
-        (rsimp; congr 1; omega))
+    | (refine hkm _ (by rsimp) (by rsimp) ?_ ?_ (by rsimp) ⟨?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
+        first | carry_close [hR.nxt, hR.len, hR.src, hR.p, hR.flags, hR.keep] | (rsimp; congr 1; omega))
 
 theorem subw_ofNat {a b : Nat} (ha : a < 2 ^ 31) (hb : b ≤ a) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 a) - BitVec.extractLsb 31 0 (BitVec.ofNat 64 b)) =
@@ -256,13 +241,8 @@ theorem sfv_copyB (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt Mt0 :
       nx_run hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19, BitVec.add_assoc] at 2147541592
       obtain ⟨hF'', hFr''⟩ := SbFile.flushed (ra := 0x8000e2bc#64) (s0 := R 8) (s1 := R 9) (s2 := R 18)
         (s3 := R 19) hx hFr' (by omega) hf1 hf3 (by omega)
-      refine hk _ _ [] (pend ++ copyBytes g src c) (by simp) (by rsimp; rw [rk18]; exact h18)
-        (by rsimp; rw [rk9]; exact h9) (by rsimp; rw [rk19]; exact h19) (by rsimp; rw [rk22]; exact h22)
-        ?_ hF'' hFr''
-      intro x hx
-      simp only [sfvKeep, List.mem_cons, List.not_mem_nil, or_false] at hx
-      rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rsimp <;>
-        (simp only [rk2, rk8, rk20, rk21, rk23, rk24, rk25, rk26, rk27]; exact hkeep _ (by decide))
+      refine hk _ _ [] (pend ++ copyBytes g src c) (by simp) ?_ ?_ ?_ ?_ ?_ hF'' hFr'' <;>
+        carry_close [rk18, rk9, rk19, rk22, h18, h9, h19, h22, rk2, rk8, rk20, rk21, rk23, rk24, rk25, rk26, rk27, hkeep]
 
 theorem ReadB.byteSrc {Dt : Mem} {DA : List Nat} {S : Nat → Prop} {Mt : Mem} {a : Nat} {b : BitVec 8}
     (h : ReadB Dt DA S Mt a b) : ByteSrc S Mt Dt DA a b := by
@@ -323,11 +303,11 @@ theorem sfv_direct (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
   refine moddi3_sw hlive' hsub (BitVec.ofNat 64 L) 1024#64 0x8000e238#64 _ Mt (by decide)
     (by rsimp; exact hsx) (by rsimp) (by rsimp) (by decide) (fun R' hq hkp => ?_)
   have e10 := moddi3_nat hL2 hq
-  have k8 : R' 8 = f := by rw [hkp 8 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; rsimp; exact h8
-  have k18 : R' 18 = BitVec.ofNat 64 L := by rw [hkp 18 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; rsimp
-  have k21 : R' 21 = 0x8001b538#64 := by rw [hkp 21 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; rsimp; exact h21
-  have k22 : R' 22 = BitVec.ofNat 64 src := by rw [hkp 22 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; rsimp; exact h22
-  have k2 : R' 2 = fp := by rw [hkp 2 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; rsimp; exact h2
+  have k8 : R' 8 = f := by carry_close [hkp, h8]
+  have k18 : R' 18 = BitVec.ofNat 64 L := by carry_close [hkp]
+  have k21 : R' 21 = 0x8001b538#64 := by carry_close [hkp, h21]
+  have k22 : R' 22 = BitVec.ofNat 64 src := by carry_close [hkp, h22]
+  have k2 : R' 2 = fp := by carry_close [hkp, h2]
   have esw := subw_ofNat (a := L) (b := L % 1024) hL2 (by omega)
   nx_run hlive using [k8, k18, k21, k22, k2, e10, hwr, hck, esw] at 2147545044
   have hn : (copyBytes g src (L - L % 1024)).length = L - L % 1024 := copyBytes_length _ _ _
@@ -340,16 +320,7 @@ theorem sfv_direct (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
   · nx_ret hR
     nx_run hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19, rk22, BitVec.add_assoc] at 2147541592
     obtain ⟨hF', hFr'⟩ := hF.swrote (ra := 0x8000e250#64) (s0 := f) (by omega) hf1 (by omega) (by omega)
-    refine hk _ _ ?_ ?_ ?_ ?_ ?_ hF' hFr'
-    · rsimp; rw [hn]
-    · rsimp; rw [rk9, hkp 9 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; rsimp; exact h9
-    · rsimp; rw [rk19, hkp 19 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; rsimp; exact h19
-    · rsimp; rw [rk22]; exact k22
-    · intro x hx
-      simp only [sfvKeep, List.mem_cons, List.not_mem_nil, or_false] at hx
-      rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rsimp <;>
-        (simp only [rk2, rk8, rk20, rk21, rk23, rk24, rk25, rk26, rk27];
-         rw [hkp _ (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)]; rsimp;
-         exact hR.keep _ (by decide))
+    refine hk _ _ ?_ ?_ ?_ ?_ ?_ hF' hFr' <;> carry_close [hn, rk9, rk19, rk22, k22, h9, h19, rk2, rk8, rk20, rk21,
+      rk23, rk24, rk25, rk26, rk27, hkp, hR.keep]
 
 end VsaIris.Sym.Fp

@@ -94,14 +94,10 @@ theorem vfp_digits (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
   refine umoddi3_sw hlive' hsub (BitVec.ofNat 64 n) 10#64 0x8000ca8c#64 _ Mt (by decide) (by rsimp)
     (by rsimp) (by rsimp) (by decide) fun R1 hm hk1 => ?_
   have hm' : R1 10 = BitVec.ofNat 64 (n % 10) := BitVec.eq_of_toNat_eq (by rw [hm]; simp; omega)
-  have k1 : ∀ x ∈ digKeep ++ [8, 22, 27], R1 x = R x := fun x hx => by
-    simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hx
-    rw [hk1 x (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)]
-    rsimp; rw [if_neg (by omega), if_neg (by omega), if_neg (by omega)]
-  have k2 : R1 2 = sp := (k1 2 (by decide)).trans h2
-  have k20 : R1 20 = 0#64 := (k1 20 (by decide)).trans h20
-  have k22 : R1 22 = BitVec.ofNat 64 n := (k1 22 (by decide)).trans h22
-  have k27 : R1 27 = BitVec.ofNat 64 D := (k1 27 (by decide)).trans h27
+  have k2 : R1 2 = sp := by carry_close [hk1, h2]
+  have k20 : R1 20 = 0#64 := by carry_close [hk1, h20]
+  have k22 : R1 22 = BitVec.ofNat 64 n := by carry_close [hk1, h22]
+  have k27 : R1 27 = BitVec.ofNat 64 D := by carry_close [hk1, h27]
   have hDn : (BitVec.ofNat 64 D).toNat = D := by rw [BitVec.toNat_ofNat]; have := sp.isLt; omega
   have eD : BitVec.ofNat 64 D + 18446744073709551615#64 = BitVec.ofNat 64 (D - 1) := by
     apply BitVec.eq_of_toNat_eq
@@ -113,18 +109,10 @@ theorem vfp_digits (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
   refine udiv_sw hlive' hsub (BitVec.ofNat 64 n) 10#64 0x8000ca6c#64 _ _ (by decide) (by rsimp)
     (by rsimp) (by rsimp) (by decide) fun R2 hq _ hk2 => ?_
   have hq' : R2 10 = BitVec.ofNat 64 (n / 10) := BitVec.eq_of_toNat_eq (by rw [hq]; simp; omega)
-  have m : ∀ x, x ≠ 1 → x ≠ 8 → x ≠ 10 → x ≠ 11 → x ≠ 12 → x ≠ 13 → x ≠ 25 → R2 x = R1 x := fun x a b c d e f g => by
-    rw [hk2 x c d e f]; rsimp; rw [if_neg a, if_neg d, if_neg c, if_neg b, if_neg g, if_neg c]
-  have m2 : ∀ x ∈ digKeep ++ [22, 27], R2 x = R x := fun x hx => by
-    have hx' := hx
-    simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hx'
-    rw [m x (by omega) (by omega) (by omega) (by omega) (by omega) (by omega) (by omega)]
-    exact k1 x (by revert hx; simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false]; omega)
-  have m25 : R2 25 = BitVec.ofNat 64 (D - 1) := by
-    rw [hk2 25 (by decide) (by decide) (by decide) (by decide)]; rsimp
-  have n2 : R2 2 = sp := (m2 2 (by decide)).trans h2
-  have n20 : R2 20 = 0#64 := (m2 20 (by decide)).trans h20
-  have n22 : R2 22 = BitVec.ofNat 64 n := (m2 22 (by decide)).trans h22
+  have m25 : R2 25 = BitVec.ofNat 64 (D - 1) := by carry_close [hk2]
+  have n2 : R2 2 = sp := by carry_close [hk2, hk1, h2]
+  have n20 : R2 20 = 0#64 := by carry_close [hk2, hk1, h20]
+  have n22 : R2 22 = BitVec.ofNat 64 n := by carry_close [hk2, hk1, h22]
   have hnn : (BitVec.ofNat 64 n).toNat = n := by rw [BitVec.toNat_ofNat]; omega
   have hD1n : (BitVec.ofNat 64 (D - 1)).toNat = D - 1 := by rw [BitVec.toNat_ofNat]; have := sp.isLt; omega
   have hFr : Frame (writeLog Mt [((BitVec.ofNat 64 (D - 1)).toNat, 1,
@@ -132,8 +120,8 @@ theorem vfp_digits (hlive : ∀ p ∈ stdioText, live p.1) (hlive' : ∀ p ∈ i
     Frame.store Mt _ fun b h1 h2 => by rw [hD1n] at h1 h2; unfold DigReg; omega
   have hkp : ∀ x ∈ digKeep, upd (upd (upd (upd R2 23 (BitVec.ofNat 64 n)) 15 9#64) 27
       (BitVec.ofNat 64 (D - 1))) 22 (BitVec.ofNat 64 (n / 10)) x = R x := by
-    have := fun x (hx : x ∈ digKeep) => m2 x (List.mem_append_left _ hx)
-    keep_chain this
+    have m2 : ∀ x ∈ digKeep, R2 x = R x := by carry_close [hk2, hk1]
+    keep_chain m2
   by_cases h9 : n ≤ 9
   ·
     have hb : ((BitVec.ofNat 64 n).toNat ≤ (9#64).toNat) = True := eq_true (by rw [hnn]; exact h9)

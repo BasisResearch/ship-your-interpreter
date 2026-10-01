@@ -4,6 +4,7 @@ import VsaIris.Vsa.Stderr.SEmpty
 import VsaIris.Vsa.Fprintf.SConv
 import VsaIris.Vsa.Fprintf.ScanTo
 import VsaIris.Vsa.Fprintf.Strlen
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym
 
@@ -169,10 +170,8 @@ theorem fpr_end {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     have hI2 := (hI.sprint hS hSP).step hS (Fp.Frame.store (a := (sp + 232#64).toNat) (w := 4) M' (0#64) fun b h1 h2 => by
       rw [eo 232 (by omega)] at h1 h2; unfold LoopReg; omega)
     have hfra : ldv .ld (writeLog M' [((sp + 232#64).toNat, 4, 0#64)]) (sp + 592#64 + 24#64).toNat = ra := by
-      rw [BitVec.add_assoc, show (592#64 + 24#64 : BitVec 64) = BitVec.ofNat 64 616 from rfl, eo 616 (by omega)]
-      exact hI2.fra
-    have hfraM : ldv .ld M' (sp + 616#64).toNat = ra := by
-      rw [eo 616 (by omega)]; exact (hI.sprint hS hSP).fra
+      carry_close [eo 616 (by omega), hI2.fra]
+    have hfraM : ldv .ld M' (sp + 616#64).toNat = ra := by carry_close [eo 616 (by omega), (hI.sprint hS hSP).fra]
     have hsp' : sp + 672#64 = s := by
       apply BitVec.eq_of_toNat_eq; rw [eo 672 (by omega)]; omega
     rw [show fprC R0 1 = 0x80006204#64 from ite_eq_left rfl]

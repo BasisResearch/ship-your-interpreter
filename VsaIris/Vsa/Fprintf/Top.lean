@@ -1,6 +1,7 @@
 import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.Outer
 import VsaIris.Interp.SymFront
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym.Fp
 
@@ -32,45 +33,19 @@ theorem fprintf_wrap (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : 
       ldv .lh M' 0x8001bb30 = 0x200a#64 → SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q (t ++ putcs bytes) (R 1) R' M') :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x800061c0#64 R Mt := by
   nx_win sf 1024 80; have e : sf + 80#64 + 18446744073709551536#64 = sf := by rw [BitVec.add_assoc]; simp
-  have eo : ∀ k : Nat, k ≤ 100 → (sf + BitVec.ofNat 64 k).toNat = sf.toNat + k := fun k hk => sp_lit (by omega)
   xrun hlive using [h2, e, himp, BitVec.add_assoc] at 2147526788
-  refine hO _ _ (by rsimp) (by rsimp) (by rsimp) (by rsimp) (by rsimp) (by rsimp) ?_ (by nx_mem)
-    fun R1 M1 e10 e2 e1 ek hfr1 hfl1 => ?_
-  · repeat (refine Frame.snoc ?_ ?_)
-    all_goals first | exact Frame.refl _ _ |
-      (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_lit] at h1 h2
-       omega)
-  have hn : ∀ j, j < widthOfM .ld → ¬ OuterReg (sf.toNat - 592) ((sf + 24#64).toNat + j) := by
-    intro j hj h
-    simp only [widthOfM] at hj
-    rw [eo 24 (by omega)] at h
-    unfold OuterReg at h
-    omega
-  have l24 : ldv .ld M1 (sf + 24#64).toNat = R 1 := by
-    rw [hfr1.ldv .ld hn]
-    nx_mem
+  refine hO _ _ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ fun R1 M1 e10 e2 e1 ek hfr1 hfl1 => ?_
+  all_goals try carry_close
+  · frame_chain
+  have l24 : ldv .ld M1 (sf + 24#64).toNat = R 1 := by carry_close [hfr1.ldv]
   xrun hlive using [e2, e10, l24, BitVec.add_assoc]
-  refine hk _ _ (retOK_of (by rsimp; exact e10) fun x hx h32 h10 hc => ?_) ?_ ?hfl
-  · simp only [iRegs, callClob, List.mem_cons, List.not_mem_nil, or_false, not_or] at hx hc
-    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-      rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-    all_goals first
-      | (exfalso; simp at hc; done)
-      | (exfalso; simp at h32; done)
-      | (exfalso; simp at h10; done)
-      | (rsimp; done)
-      | (rsimp; exact h2.symm)
-      | (rsimp; rw [ek _ (by decide)]; rsimp)
-  · refine (Frame.trans ?_ (hfr1.mono fun a h => ?_))
+  refine hk _ _ (retOK_of (by carry_close [e10]) ?_) ?_ hfl1
+  · simp (config := {decide := true}) only [iRegs, callClob, List.forall_mem_cons, List.forall_mem_nil, ne_eq,
+      not_true_eq_false, false_implies, true_implies, implies_true, true_and, and_true]
+    carry_close [ek, h2]
+  · refine Frame.trans ?_ (hfr1.mono ?_)
     · repeat (refine Frame.snoc ?_ ?_)
-      all_goals first | exact Frame.refl _ _ |
-        (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_lit] at h1 h2
-         unfold FpReg; omega)
-    · unfold FpReg; unfold OuterReg at h
-      rcases h with ⟨h1, h2⟩ | h | h
-      · exact .inl ⟨by rw [Nat.sub_sub] at h1; exact h1, by omega⟩
-      · exact .inr (.inl h)
-      · exact .inr (.inr h)
-  case hfl => exact hfl1
+      all_goals first | exact Frame.refl _ _ | region_close
+    · region_close
 
 end VsaIris.Sym.Fp

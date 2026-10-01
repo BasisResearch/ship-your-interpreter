@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.SConv
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym.Fp
 
@@ -32,11 +33,11 @@ abbrev vfpSaved : List Nat := [8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
       SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t (C 1) R'
         (writeLog Mt [((sp + 232#64).toNat, 4, 0#64)])) :
     SWPO live (stdioText ++ dataOf Dt DA) iRegs (outS s need) Q t 0x8000acbc#64 R Mt by
-  nx_win sp 1024 592; have eo : ∀ k : Nat, k ≤ 600 → (sp + BitVec.ofNat 64 k).toNat = sp.toNat + k := fun k hk => sp_lit (by omega)
-  have h1 : ldv .ld Mt (sp + 584#64).toNat = C 1 := by rw [eo 584 (by omega)]; exact hS.ra
-  have h8 : ldv .ld Mt (sp + 576#64).toNat = C 8 := by rw [eo 576 (by omega)]; exact hS.s0
-  have h20' : ldv .ld Mt (sp + 544#64).toNat = C 20 := by rw [eo 544 (by omega)]; exact hS.s4
-  have h22 : ldv .ld Mt (sp + 528#64).toNat = C 22 := by rw [eo 528 (by omega)]; exact hS.s6
+  nx_win sp 1024 592
+  have h1 : ldv .ld Mt (sp + 584#64).toNat = C 1 := by carry_close [hS.ra]
+  have h8 : ldv .ld Mt (sp + 576#64).toNat = C 8 := by carry_close [hS.s0]
+  have h20' : ldv .ld Mt (sp + 544#64).toNat = C 20 := by carry_close [hS.s4]
+  have h22 : ldv .ld Mt (sp + 528#64).toNat = C 22 := by carry_close [hS.s6]
   have h9 := hS.s1; have h18 := hS.s2; have h19 := hS.s3
   have h21 := hS.s5; have h23 := hS.s7; have h24 := hS.s8; have h25 := hS.s9; have h26 := hS.s10
   have h27 := hS.s11
@@ -47,11 +48,7 @@ abbrev vfpSaved : List Nat := [8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
 #ix_piece vfpTail_2 from vfpTail_1 by
   nf_go 2 [14] hlive using [h2, h20, hfl, hfl2, hc, h1, h8, h9, h18, h19, h20', h21, h22, h23, h24, h25, h26, h27,
     h512, h64, BitVec.add_assoc] at 2147483648
-  all_goals refine hk _ (by rsimp <;> first | rfl | assumption) (by rsimp <;> first | rfl | assumption) (by rsimp <;> first | rfl | assumption) ?_
-  all_goals (intro x hx
-             simp only [vfpSaved, List.mem_cons, List.not_mem_nil, or_false] at hx
-             rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rsimp <;>
-               first | rfl | assumption)
+  all_goals refine hk _ ?_ ?_ ?_ ?_ <;> carry_close
 
 #ix_chain vfp_tail := [vfpTail_1, vfpTail_2]
 
@@ -94,9 +91,8 @@ theorem vfp_end0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   nx_win sp 1024 592; have h2 := hP.spR; have hre := hP.reent; have hfi := hP.file; have hres := hP.resid
   rw [h0] at hres
   nx_run hlive using [h2, hre, hfi, hres] at 2147527868
-  refine vfp_tail hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa hfC hfsp ?_ ?_ hE hP.count hS hra hk0
-  · rsimp; exact h2
-  · rsimp
+  exact vfp_tail hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa hfC hfsp (by carry_close [h2]) (by carry_close) hE hP.count
+    hS hra hk0
 
 #ix_piece vfp_end1 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
@@ -133,10 +129,8 @@ theorem vfp_end0 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
   rsimp
   nx_run hlive using [k2, k20, rk10] at 2147527868
   have hE' : EndFile M' f fl := ⟨H.flags.trans hE.flags, H.flags2.trans hE.flags2, hE.snpt, hE.serr⟩
-  refine vfp_tail hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa hfC hfsp ?_ ?_ hE' (H.count.trans hP.count)
-    (hS.ofEnd H (by omega)) hra (hk1 out M' hpost)
-  · rsimp; exact k2
-  · rsimp; exact k20
+  exact vfp_tail hlive hs1 hs2 hs3 hs4 hal hf1 hf2 hfa hfC hfsp (by carry_close [k2]) (by carry_close [k20]) hE'
+    (H.count.trans hP.count) (hS.ofEnd H (by omega)) hra (hk1 out M' hpost)
 
 theorem vfp_end {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}

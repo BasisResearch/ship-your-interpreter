@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Fprintf.Flush
 import VsaIris.Vsa.SymCompact
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym.Fp
 
@@ -191,8 +192,6 @@ theorem SbFile.flushed {M2 Mt0 : Mem} {f fp ra s0 s1 s2 s3 : BitVec 64}
     unfold fflushFMt sflushFMt swriteMt
     frame_chain
   have hFr' := hFr.trans hA
-  have h12 : (f + 12#64).toNat = f.toNat + 12 := by
-    rw [BitVec.toNat_add]; simp only [BitVec.toNat_ofNat]; omega
   refine ⟨⟨hF.transport hA ?_ hf1 (.inr hf2) (by omega) hfp, by simp, ?_, ?_,
     fun i h => absurd h (by simp)⟩, hFr'⟩
   all_goals unfold fflushFMt sflushFMt swriteMt
@@ -210,13 +209,11 @@ theorem SbFile.swrote {Mt : Mem} {f fp ra s0 : BitVec 64} {pend : List (BitVec 8
     frame_chain
   have hA' : Frame (swriteMt Mt fp ra s0) Mt (SfvReg f.toNat fp.toNat) :=
     hA.mono fun a h => by unfold SwReg at h; unfold SfvReg; omega
-  have h12 : (f + 12#64).toNat = f.toNat + 12 := by
-    rw [BitVec.toNat_add]; simp only [BitVec.toNat_ofNat]; omega
   refine ⟨⟨hF.toSbFixed.transport hA' ?_ hf1 (.inr hf2) (by omega) hfp, hF.len, ?_, ?_, fun i h => ?_⟩, hA'⟩
   · unfold swriteMt
     simp (config := {failIfUnchanged := false}) only [BitVec.add_assoc, BitVec.reduceAdd]; nx_mem; decide
-  · rw [hA.ldv .ld (fun j hj => by simp only [widthOfM] at hj; unfold SwReg; omega)]; exact hF.p
-  · rw [hA.ldv .lw (fun j hj => by simp only [widthOfM] at hj; rw [h12]; unfold SwReg; omega)]; exact hF.w
+  · carry_close [hA.ldv, hF.p]
+  · carry_close [hA.ldv, hF.w]
   · rw [hA _ (by
       have : (f + 184#64).toNat = f.toNat + 184 := by
         rw [BitVec.toNat_add]; simp only [BitVec.toNat_ofNat]; omega

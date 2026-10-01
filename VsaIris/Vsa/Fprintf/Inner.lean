@@ -1,5 +1,6 @@
 import VsaIris.Vsa.Stdout.Win
 import VsaIris.Vsa.Fprintf.End
+import VsaIris.Vsa.Carry
 
 namespace VsaIris.Sym.Fp
 
@@ -25,9 +26,6 @@ theorem vfp_fileSb (hlive : ∀ p ∈ stdioText, live p.1) {t : String} {Mt : Me
   have hB0' : (f + 184#64 = 0#64) = False := eq_false hB0
   nf_go 3 [14] hlive using [h2, h8, h20, hF.flags, hF.flagsU, hF.flags2, hF.base, hF.sinit, hB0', BitVec.add_assoc]
     at 2147526980
-  refine hk _ fun x hx => ?_
-  simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-  rcases hx with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rsimp <;>
-    first | rfl | assumption
+  refine hk _ ?_; carry_close
 
 end VsaIris.Sym.Fp

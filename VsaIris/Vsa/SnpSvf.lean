@@ -93,10 +93,7 @@ structure SvfPro (s : Nat) (R0 : Nat → BitVec 64) (Mt0 : Mem) (R : Nat → Bit
   snp_run [17] hlive using [ofNat_add_ofNat, h2, h11, hdp, eS]
 
 #ix_piece svfPro_p2 from svfPro_p1 by
-  refine strlen_nw hlive hdot.str _ ?_ ?_ ?_
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide
-  intro R' h10' hkp
+  refine strlen_nw hlive hdot.str _ (by carry_close) (by carry_close) fun R' h10' hkp => ?_
 
 macro "svf_keep " h:ident " [" zs:num,* "]" : tactic => do
   let mut t ← `(tactic| skip)
@@ -120,26 +117,8 @@ macro "svf_keep " h:ident " [" zs:num,* "]" : tactic => do
   snp_run [9] hlive using [ofNat_add_ofNat, k2, k8, k9, k22]
 
 #ix_piece svfPro_p5 from svfPro_p4 by
-  refine hK _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact k2
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact k8
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact k9
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact k22
-  · intro z h1 h2 h3
-    have := SLKeep.get hkp z (by omega)
-    simp only [upd_apply] at this ⊢
-    repeat rw [if_neg (by omega)] at this
-    repeat rw [if_neg (by omega)]
-    exact this
-  · svf_mem
-  · svf_mem
-  · svf_mem
-  · svf_mem
-  · svf_mem
-  · svf_mem
-  · svf_mem; exact hfl
-  · intro a ha
-    svf_mem
+  refine hK _ _ ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, fun a ha => by svf_mem⟩
+  all_goals carry_close [k2, k8, k9, k22, hfl, SLKeep.get hkp]
 
 #ix_chain svfPro := [svfPro_p1, svfPro_p2, svfPro_p3, svfPro_p4, svfPro_p5]
 
@@ -255,15 +234,13 @@ theorem svf_entry {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
   have hs1 := SG.s_lo
   have hw_s := SG.win
   have hs2 := SG.s_hi
-  have hfl : ldv .lhu Mt (BitVec.ofNat 64 (s - 264 + 16)).toNat = 0x208#64 := by
-    rw [toNat_ofNat_lt (by omega)]
-    exact lhu_of_lh hB.fl
+  have hfl : ldv .lhu Mt (BitVec.ofNat 64 (s - 264 + 16)).toNat = 0x208#64 := by carry_close [lhu_of_lh hB.fl]
   refine svfPro hlive R Mt (by omega) hs2 SG.s_al h2 h11 hdp hdot hfl ?_ fun R' Mt' SP =>
     svfPro2 hlive R Mt R' Mt' SG SP hB hK
   apply BitVec.eq_of_toNat_eq; simp only [BitVec.toNat_ofNat]; omega
 
-def SvfRegs (R' R : Nat → BitVec 64) : Prop :=
-  ∀ z, z = 2 ∨ z = 8 ∨ z = 9 ∨ z = 18 ∨ z = 19 ∨ z = 21 → R' z = R z
+macro "SvfRegs " R':term:max R:term:max : term =>
+  `(∀ z, z = 2 ∨ z = 8 ∨ z = 9 ∨ z = 18 ∨ z = 19 ∨ z = 21 → $R' z = $R z)
 
 def SvfKeep (s a : Nat) : Prop :=
   (s - 864 + 8 ≤ a ∧ a < s - 864 + 16) ∨ (s - 864 + 224 ≤ a ∧ a < s - 864 + 232) ∨
@@ -403,15 +380,8 @@ theorem svf_mbtowc {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {
   have hbq := lbu_img_ofNat Dt q (by omega)
   snp_run hlive using [ofNat_add_ofNat, h2, h8, h9, h22, hmb', hmx', hbq] at 0x80007744
   refine hk _ _ ⟨A.scratch SG ?_ ?_ ?_, ?_, ?_, ?_⟩
-  · intro z hz
-    rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · intro a ha
-    svf_mem
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h22
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact snez_ofNat _
-  · exact ldv_lw_store4 Mt _ _ (by have := (imgM Dt q).isLt; omega)
+  case refine_6 => exact ldv_lw_store4 Mt _ _ (by have := (imgM Dt q).isLt; omega)
+  all_goals carry_close [h22, snez_ofNat]
 
 theorem svf_scan_br {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
@@ -441,22 +411,12 @@ theorem svf_scan_br {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
   by_cases hp : imgM Dt q = 37#8
   · have hp' : BitVec.ofNat 64 (imgM Dt q).toNat = 37#64 := by rw [hp]; rfl
     snp_runF hlive using [ofNat_add_ofNat, h2, h10, h19, h22, hwc, hp'] at 0x8000775c
-    refine hP hp _ ?_ ?_ ?_ ?_
-    · intro z hz
-      rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · exact h22
-    · exact h10
+    refine hP hp _ ?_ ?_ ?_ ?_ <;> carry_close [h22, h10]
   · have hp' : BitVec.ofNat 64 (imgM Dt q).toNat ≠ 37#64 := fun h => hp (by
       apply BitVec.eq_of_toNat_eq; have := congrArg BitVec.toNat h
       simp only [BitVec.toNat_ofNat] at this; have := (imgM Dt q).isLt; simp; omega)
     snp_runF hlive using [ofNat_add_ofNat, h2, h10, h19, h22, hwc, hp'] at 0x80007724
-    refine hN hz hp _ ?_ ?_ ?_
-    · intro z hz
-      rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+    refine hN hz hp _ ?_ ?_ ?_ <;> carry_close [h22]
 
 structure FmtGeom (DA : List Nat) (q k : Nat) : Prop where
   dom : InDA DA q (q + k + 1)
@@ -627,16 +587,8 @@ theorem svf_litBody {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) 
   snp_runF hlive using [ofNat_add_ofNat, Nat.zero_add, h2, h23, h24, hf, hr, hcn, hres, haw] at 0x8000776c 0x800079b0
   all_goals rename_i hcnd
   all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hcnd
-  · refine hP hcnd _ _ (SvfSt.ofLit A SG hc hsrc ?_ ?_) ?_
-    · intro z hz
-      rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · refine hE (Classical.not_not.mp hcnd) _ _ (SvfSt.ofLit A SG hc hsrc ?_ ?_) ?_
-    · intro z hz
-      rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-        simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  · refine hP hcnd _ _ (SvfSt.ofLit A SG hc hsrc ?_ ?_) ?_ <;> carry_close
+  · refine hE (Classical.not_not.mp hcnd) _ _ (SvfSt.ofLit A SG hc hsrc ?_ ?_) ?_ <;> carry_close
 
 theorem SvfSt.ofAt {DA : List Nat} {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem}
     {p ap : Nat} {rt : BitVec 64} {total : List (BitVec 8)} {R : Nat → BitVec 64} {Mt : Mem}
@@ -675,9 +627,7 @@ theorem svf_lit0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
   all_goals snp_runF hlive using [ofNat_add_ofNat, h2, h10, h22, hf, hsw, h0] at 0x8000776c 0x800079b0
   all_goals refine hk _ _ [] (.inl ⟨rfl, he⟩) ?_ ?_
   all_goals (try (rw [e]; refine SvfSt.ofAt (A.scratch SG ?_ ?_ fun _ _ => rfl)))
-  all_goals (try (intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl))
-  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  all_goals exact h22
+  all_goals carry_close [h22]
 
 theorem svf_lit1P {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
@@ -698,13 +648,8 @@ theorem svf_lit1P {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     have := congrArg BitVec.toNat h; simp only [BitVec.toNat_ofNat] at this; omega
   snp_runF hlive using [ofNat_add_ofNat, h2, h10, h22, hf, hsw, h0] at 0x80007970 0x8000776c
   refine svf_litBody hlive _ Mt SG (A.scratch SG ?_ ?_ fun _ _ => rfl) ?_ hc hsrc
-    (fun _ R'' Mt'' St h22'' => hk R'' Mt'' _ (.inr ⟨rfl, hlt⟩) St ?_) (fun h => absurd h ?_)
-  · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · rw [h22'']; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h22
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide
+    (fun _ R'' Mt'' St h22'' => hk R'' Mt'' _ (.inr ⟨rfl, hlt⟩) St (h22''.trans ?_)) (fun h => absurd h ?_)
+  all_goals carry_close [h22]
 
 theorem svf_lit1Z {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
@@ -725,13 +670,8 @@ theorem svf_lit1Z {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     have := congrArg BitVec.toNat h; simp only [BitVec.toNat_ofNat] at this; omega
   snp_runF hlive using [ofNat_add_ofNat, h2, h10, h22, hf, hsw, h0] at 0x80007970 0x800079b0
   refine svf_litBody hlive _ Mt SG (A.scratch SG ?_ ?_ fun _ _ => rfl) ?_ hc hsrc
-    (fun h => absurd h ?_) (fun _ R'' Mt'' St h22'' => hk R'' Mt'' _ (.inr ⟨rfl, hlt⟩) St ?_)
-  · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide
-  · rw [h22'']; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h22
+    (fun h => absurd h ?_) (fun _ R'' Mt'' St h22'' => hk R'' Mt'' _ (.inr ⟨rfl, hlt⟩) St (h22''.trans ?_))
+  all_goals carry_close [h22]
 
 theorem svf_lit {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
@@ -895,9 +835,7 @@ theorem svf_printSign0 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.
   all_goals snp_runF hlive using [ofNat_add_ofNat, h2, h23, hcn, hres, h132, h28, h16, h22, h167, h20, extract_0, extract_m1, hn0, hn1] at 0x800078bc
   all_goals refine hk _ Mt L (by simp) ⟨St.core.scratch SG ?_ fun _ _ => rfl, ?_, St.cnt, St.res,
     St.iov, St.src, St.len, St.sum⟩ (fun _ _ => rfl) h32 ?_ ?_ ?_ ?_ ?_ ?_
-  all_goals (try (intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl))
-  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  all_goals (try exact h23)
+  all_goals carry_close [h23]
 
 theorem svf_sign45_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
@@ -918,10 +856,7 @@ theorem svf_sign45_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p
   all_goals snp_runF hlive using [h5, h27, h22, h20, extract_0, extract_m1, hn0, hn1] at 0x800078bc
   all_goals refine hk _ Mt _ (by simp) ⟨St.core.scratch SG ?_ fun _ _ => rfl, ?_, St.cnt, St.res,
     St.iov, St.src, St.len, St.sum⟩ hMk h32 ?_ ?_ ?_ ?_ ?_ ?_
-  all_goals (try (intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl))
-  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  all_goals first | exact St.r23 | exact k6 | exact k16 | exact k22 | exact k26 | exact k28 |
-    (rw [h12, sumLen_append_one])
+  all_goals carry_close [St.r23, k6, k16, k22, k26, k28, h12, sumLen_append_one]
 
 #ix_piece svfSign45_p1 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
@@ -951,21 +886,10 @@ theorem svf_sign45_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p
   have hsx := VsaIris.Interp.sext32_ofNat_eq (a := L.length + 1) (by omega)
   have hsa := SG.s_al
   snp_runF hlive using [ofNat_add_ofNat, h2, h23, hsx] at 0x80007878
-  refine svf_sign45_tail hlive R _ _ SG (St.push SG (signSrc SG) (by omega) hsum ?_ ?_ ?_ ?_ ?_ ?_ ?_)
-    ?_ ?_ ?_ size ?_ hsize h20 ?_ ?_ ?_ ?_ ?_ ?_ Mt ?_ hk
-  · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    rw [show s - 864 + 352 + 16 * L.length + 16 = s - 864 + 352 + 16 * (L.length + 1) by omega]
-  · intro a ha; unfold PushW at ha; svf_mem
-  · svf_mem
-  · svf_mem
-  · svf_mem
-  · svf_mem
-  all_goals (try simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
-  · exact h22
-  · svf_mem; exact h32
-  · intro a ha; unfold PZone at ha; svf_mem
+  refine svf_sign45_tail hlive R _ _ SG (St.push SG (signSrc SG) (by omega) hsum ?_ ?_
+    (fun a ha => by unfold PushW at ha; svf_mem) ?_ ?_ ?_ (by svf_mem)) ?_ ?_ ?_ size ?_ hsize h20 ?_ ?_ ?_ ?_ ?_ ?_ Mt
+    (fun a ha => by unfold PZone at ha; svf_mem) hk
+  all_goals carry_close [h22, h32, Nat.mul_add_one, ← Nat.add_assoc]
 
 #ix_chain svf_printSign45 := [svfSign45_p1, svfSign45_p2]
 
@@ -1043,20 +967,14 @@ theorem svf_body_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
       rw [h16, h28] at hc
       simp (disch := omega) only [toInt_ofNat_small, BitVec.reduceToInt] at hc; omega
     subst e
-    refine hk _ _ ?_ (fun a ha => by rw [← hMk a ha]; unfold PZone at ha; svf_mem) (by svf_mem; exact h32) ?_
-    · rw [show c + 0 = 0 + c by omega]
-      refine St.setRet (BitVec.ofNat 64 (0 + c)) SG ?_ ?_
-      · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-          simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h12
-  · refine hk _ _ ?_ (fun a ha => by rw [← hMk a ha]; unfold PZone at ha; svf_mem) (by svf_mem; exact h32) ?_
-    · rw [Nat.add_comm]
-      refine St.setRet (BitVec.ofNat 64 (rs + c)) SG ?_ ?_
-      · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-          simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h12
+    refine hk _ _ ?_ (fun a ha => by rw [← hMk a ha]; unfold PZone at ha; svf_mem) (by carry_close [h32])
+      (by carry_close [h12])
+    rw [show c + 0 = 0 + c by omega]
+    refine St.setRet (BitVec.ofNat 64 (0 + c)) SG ?_ ?_ <;> carry_close
+  · refine hk _ _ ?_ (fun a ha => by rw [← hMk a ha]; unfold PZone at ha; svf_mem) (by carry_close [h32])
+      (by carry_close [h12])
+    rw [Nat.add_comm]
+    refine St.setRet (BitVec.ofNat 64 (rs + c)) SG ?_ ?_ <;> carry_close
 
 #ix_piece svfBody_p1 {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
@@ -1083,19 +1001,10 @@ theorem svf_body_tail {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1
 
 #ix_piece svfBody_p2 from svfBody_p1 by
   snp_runF hlive using [ofNat_add_ofNat, h2, h23] at 0x800078ec
-  refine svf_body_tail hlive _ _ SG (St.push SG hsrc (by omega) hsum ?_ ?_ ?_ ?_ ?_ ?_ ?_) ?_ ?_ ?_ rs ?_
-    hrs (by svf_mem; exact h32) Mt (fun a ha => by unfold PZone at ha; svf_mem) hk
-  · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    rw [show s - 864 + 352 + 16 * L.length + 16 = s - 864 + 352 + 16 * (L.length + 1) by omega]
-  · intro a ha; unfold PushW at ha; svf_mem
-  · svf_mem
-  · svf_mem
-  · svf_mem
-  · svf_mem
-  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  all_goals first | exact h4 | exact h28 | exact h16 | (rw [sumLen_append_one])
+  refine svf_body_tail hlive _ _ SG (St.push SG hsrc (by omega) hsum ?_ ?_
+    (fun a ha => by unfold PushW at ha; svf_mem) ?_ ?_ ?_ (by svf_mem)) ?_ ?_ ?_ rs ?_
+    hrs (by carry_close [h32]) Mt (fun a ha => by unfold PZone at ha; svf_mem) hk
+  all_goals carry_close [h4, h28, h16, sumLen_append_one, Nat.mul_add_one, ← Nat.add_assoc]
 
 #ix_chain svf_printBody := [svfBody_p1, svfBody_p2]
 
@@ -1116,16 +1025,8 @@ theorem svf_back {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt
   have h2 := C.r2
   have h21 := C.r21
   snp_runF hlive using [ofNat_add_ofNat, h2, h21, h32] at 0x80007720
-  refine hk _ _ ⟨C.update SG ?_ (fun a ha => ?_) ?_ ?_ ?_, ?_, ?_, ?_⟩
-  · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;>
-      simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · unfold SvfKeep at ha; svf_mem
-  · svf_mem; exact C.fmt
-  · svf_mem; exact C.ret
-  · svf_mem; exact C.ap
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · svf_mem
-  · svf_mem; exact hres
+  refine hk _ _ ⟨C.update SG ?_ (fun a ha => by unfold SvfKeep at ha; svf_mem) ?_ ?_ ?_, ?_, ?_, ?_⟩
+  all_goals carry_close [C.fmt, C.ret, C.ap, hres]
 
 theorem SvfCore.flushed {s dst n : Nat} {R0 : Nat → BitVec 64} {Mt0 : Mem} {p ap : Nat}
     {rt : BitVec 64} {total total' : List (BitVec 8)} {R R' : Nat → BitVec 64} {Mt Mt' : Mem}
@@ -1199,36 +1100,20 @@ theorem svf_flush {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {D
     snp_runF hlive using [ofNat_add_ofNat, h2, h8, hfp, h12, hne] at 0x8000e908
     have hL3 := St.len
     have hdsep := SG.d_sep
-    have hu := St.core.uio
-    have hcn := St.cnt
-    have hrs := St.res
-    rw [toNat_ofNat_lt (by omega)] at hu hcn hrs
     refine ssprint_nw hlive (gOf s Dt Mt) total L _ Mt SG (by omega) (by omega) ?_ ?_ ?_ ?_ ?_ ?_ ?_
-      St.iov (piecesOK_of_src St.src) St.core.buf ?_
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h2
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, snpU]
-      rw [show s - 864 + 224 = s - 640 by omega]
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide
-    · simp only [snpU, snpIov]
-      rw [show s - 640 = s - 864 + 224 by omega, show s - 512 = s - 864 + 352 by omega]; exact hu
-    · simp only [snpU]; rw [show s - 640 + 8 = s - 864 + 232 by omega]; exact hcn
-    · simp only [snpU]; rw [show s - 640 + 16 = s - 864 + 240 by omega]; exact hrs
+      St.iov (piecesOK_of_src St.src) St.core.buf ?k
+    all_goals try simp only [snpU, snpIov, snpFP]
+    all_goals try carry_close [h2, St.core.uio, St.cnt, St.res]
     · intro R' Mt' h10 h2' hkp PO
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
       snp_runF hlive using [h10] at 0x80007918
       refine svf_back hlive R' Mt' SG (St.core.flushed SG ?_ PO.frame PO.buf) ?_ ?_ hk
-      · intro z hz
-        rcases hz with rfl | rfl | rfl | rfl | rfl | rfl
-        · rw [h2']; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-        all_goals (rw [hkp _ (by omega)]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false])
+      · intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl <;> carry_close [h2', hkp]
       · rw [toNat_ofNat_lt (by omega)]
         refine (ldv_agree .ld fun i hi => PO.frame _ ?_).trans ?_
         · unfold PrintFrame PrintW snpFP snpU; simp only [widthOfM] at hi; omega
         · rw [← toNat_ofNat_lt (x := s - 864 + 32) (by omega)]; exact h32
-      · have := PO.res
-        simp only [snpU] at this
-        rw [toNat_ofNat_lt (by omega), show s - 864 + 240 = s - 640 + 16 by omega]; exact this
+      · have := PO.res; simp only [snpU] at this; carry_close [this]
 
 def sgL (s sg : Nat) : List (Nat × Nat) := if sg = 0 then [] else [(s - 864 + 167, 1)]
 
@@ -1313,16 +1198,11 @@ theorem svf_epi {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
     rw [show s - 864 + 592 = s - 272 by omega]
   snp_runF hlive using [ofNat_add_ofNat, h2, h15, sv.ra, sv.s0, sv.s1, sv.s2, sv.s3, sv.s4, sv.s5, sv.s6,
     sv.s7, sv.s8, sv.s9, sv.s10, sv.s11, hr, e272]
-  refine hk _ Mt ?_ ?_ ?_ C.buf C.frame
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · intro z hz
-    rcases hz with rfl | rfl | ⟨h1, h2⟩
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · obtain rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl : z = 18 ∨ z = 19 ∨ z = 20 ∨ z = 21 ∨
-          z = 22 ∨ z = 23 ∨ z = 24 ∨ z = 25 ∨ z = 26 ∨ z = 27 := by omega
-      all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-  · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
+  refine hk _ Mt (by carry_close) ?_ (by carry_close) C.buf C.frame
+  intro z hz
+  obtain rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl : z = 8 ∨ z = 9 ∨ z = 18 ∨
+      z = 19 ∨ z = 20 ∨ z = 21 ∨ z = 22 ∨ z = 23 ∨ z = 24 ∨ z = 25 ∨ z = 26 ∨ z = 27 := by omega
+  all_goals simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
 
 theorem svf_end {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt : Mem} {DA : List Nat}
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {s dst n : Nat}
@@ -1341,53 +1221,30 @@ theorem svf_end {live : Nat → Prop} (hlive : ∀ p ∈ snpText, live p.1) {Dt 
   have hres := St.res
   have hsum := St.sum
   have hfl : ldv .lhu Mt (BitVec.ofNat 64 (s - 264 + 16)).toNat = 0x208#64 := by
-    rw [toNat_ofNat_lt (by omega)]; exact lhu_of_lh St.core.buf.fl
+    carry_close [lhu_of_lh St.core.buf.fl]
   rcases Nat.eq_zero_or_pos (sumLen L) with h0 | hpos
   · have hcat := catPieces_of_sumLen_zero (gOf s Dt Mt) L h0
     rw [h0] at hres
     snp_runF hlive using [ofNat_add_ofNat, h2, hfp, hres, hfl] at 0x800079c8
-    refine svf_epi hlive R _ Mt SG St.core ?_ ?_ hal (by rw [hcat, List.append_nil] at hk; exact hk)
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide
+    refine svf_epi hlive R _ Mt SG St.core (by carry_close) (by carry_close) hal
+      (by rw [hcat, List.append_nil] at hk; exact hk)
   · have hne : BitVec.ofNat 64 (sumLen L) ≠ 0#64 := fun h => by
       have := congrArg BitVec.toNat h; simp only [BitVec.toNat_ofNat] at this; omega
     have hL3 := St.len
     have hdsep := SG.d_sep
-    have hu := St.core.uio
-    have hcn := St.cnt
-    have hrs := St.res
-    rw [toNat_ofNat_lt (by omega)] at hu hcn hrs
     snp_runF hlive using [ofNat_add_ofNat, h2, hfp, hres, hne] at 0x8000e908
     refine ssprint_nw hlive (gOf s Dt Mt) total L _ Mt SG (by omega) (by omega) ?_ ?_ ?_ ?_ ?_ ?_ ?_
-      St.iov (piecesOK_of_src St.src) St.core.buf ?_
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact h2
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, snpU]
-      rw [show s - 864 + 224 = s - 640 by omega]
-    · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide
-    · simp only [snpU, snpIov]
-      rw [show s - 640 = s - 864 + 224 by omega, show s - 512 = s - 864 + 352 by omega]; exact hu
-    · simp only [snpU]; rw [show s - 640 + 8 = s - 864 + 232 by omega]; exact hcn
-    · simp only [snpU]; rw [show s - 640 + 16 = s - 864 + 240 by omega]; exact hrs
+      St.iov (piecesOK_of_src St.src) St.core.buf ?k
+    all_goals try simp only [snpU, snpIov, snpFP]
+    all_goals try carry_close [h2, St.core.uio, St.cnt, St.res]
     · intro R' Mt' h10 h2' hkp PO
-      have h8' : R' 8 = BitVec.ofNat 64 (s - 264) := by
-        rw [hkp 8 (by omega)]; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      have kk : ∀ z, (z = 9 ∨ z = 18 ∨ z = 19 ∨ z = 21) → R' z = R z := fun z hz => by
-        rw [hkp z (by omega)]
-        rcases hz with rfl | rfl | rfl | rfl <;> simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      have k2 : R' 2 = R 2 := by rw [h2']; simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      clear hkp h2'
+      have h8' : R' 8 = BitVec.ofNat 64 (s - 264) := by carry_close [hkp]
       have hfl' : ldv .lhu Mt' (BitVec.ofNat 64 (s - 264 + 16)).toNat = 0x208#64 := by
-        rw [toNat_ofNat_lt (by omega)]; exact lhu_of_lh PO.buf.fl
+        carry_close [lhu_of_lh PO.buf.fl]
       simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
       snp_runF hlive using [ofNat_add_ofNat, h8', hfl'] at 0x800079c8
       refine svf_epi hlive (upd R' 8 (R 8)) _ Mt' SG (St.core.flushed SG ?_ PO.frame PO.buf) ?_ ?_ hal hk
-      · intro z hz
-        rcases hz with rfl | rfl | rfl | rfl | rfl | rfl
-        · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact k2
-        · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-        all_goals (simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact kk _ (by omega))
-      · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]
-      · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; decide
+      all_goals (try (intro z hz; rcases hz with rfl | rfl | rfl | rfl | rfl | rfl))
+      all_goals carry_close [h2', hkp, Nat.reduceEqDiff, reduceIte]
 
 end VsaIris.Sym
