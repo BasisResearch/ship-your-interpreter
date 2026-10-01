@@ -91,17 +91,35 @@ structure FprLoop (R : Nat → BitVec 64) (M Mt : Mem) (s p ra : BitVec 64) (C :
     (by nx_fdisch) hs3 (by omega) (by nx_fdisch) ?_ (by simp [upd_apply]) fun R3 M3 hHP => ?_
   · rw [upd_other _ _ (by decide), hH.sp_eq, eR2]
 
+set_option hygiene false in
+
+local macro "fl_head" : tactic => `(tactic| (
+  refine (hHP.frame.ldv _ fun j hj => by
+    simp only [widthOfM] at hj; unfold Fp.HeadReg; rw [hsp]; omega).trans ?_
+  simp only [vfpErrMt, swsetupErrMt]
+  nx_mem))
+
+set_option hygiene false in
+
+local macro "fl_entry" : tactic => `(tactic| (
+  refine (hF.ldv _ fun j hj => by simp only [widthOfM] at hj ⊢; rw [hsp]; omega).trans ?_
+  nx_mem))
+
 #ix_piece fprintfHead_03 from fprintfHead_02 by
-  have hA : (s + 18446744073709550936#64).toNat = s.toNat - 680 ∧ (s + 18446744073709550912#64).toNat = s.toNat - 704 :=
-    ⟨by rw [toNat_add_neg (by decide) (by omega)], by rw [toNat_add_neg (by decide) (by omega)]⟩
   refine hk _ _ ⟨?loop, ⟨?mb, ?cm⟩, ?flU, ?flS, ?fd, ?cur, ?base, ?ck, ?wr, ?fl2, ⟨?ra, ?s0, hHP.s1.trans ?_,
     hHP.s2.trans ?_, hHP.s3.trans ?_, ?s4, hHP.s5.trans ?_, ?s6, hHP.s7.trans ?_, hHP.s8.trans ?_,
     hHP.s9.trans ?_, hHP.s10.trans ?_, hHP.s11.trans ?_⟩, ?ap, ?arg, ?fra, ?frame⟩
+  case flU | flS | cur | base | fl2 => fl_head; all_goals first | rfl | decide
+  case mb | cm | fd | ck | wr =>
+    fl_head; fl_entry; simp only [hL.mbtowc, hL.mbMax, hE.fd, hE.cookie, hE.writer]
   case loop =>
     have e8 : (upd R'' 3 0x8001b510#64) 8 = 0x8001b538#64 := by carry_close [hH.s0, hV.s0]
     have e20 : (upd R'' 3 0x8001b510#64) 20 = 0x8001bbd8#64 := by carry_close [hH.s4, hV.s4]
     have e22 : (upd R'' 3 0x8001b510#64) 22 = 0x800195e0#64 := by carry_close [hH.s6, hV.s6]
     have := hHP.loop; rwa [e8, e20, e22] at this
+  case ra | s0 | s4 | s6 => fl_head; carry_close [hV.ra, hV.s0v, hV.s4v, hV.s6v, fprC, Nat.reduceEqDiff, reduceIte]
+  case ap => rw [toNat_add_lit (k := 24) (by omega)]; fl_head; carry_close [hV.ap]
+  case arg | fra => rw [toNat_add_neg (by decide) (by omega)]; fl_head; fl_entry
   case frame =>
     have F2 := hF.mono (Reg' := FprReg s) fun a ha => by unfold FprReg; rw [hsp] at ha; omega
     have F3 : Fp.Frame (vfpErrMt Mt' (s + 18446744073709550944#64)) Mt' (FprReg s) := by
@@ -113,11 +131,6 @@ structure FprLoop (R : Nat → BitVec 64) (M Mt : Mem) (s p ra : BitVec 64) (C :
     refine ((Fp.Frame.trans ?_ F2).trans F3).trans F4
     repeat (refine Fp.Frame.snoc ?_ ?_)
     all_goals first | exact Fp.Frame.refl _ _ | (intro b h1 h2; simp (config := {failIfUnchanged := false}) (disch := omega) only [toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub] at h1 h2; unfold FprReg; omega)
-  case mb | cm | fd | ck | wr | arg | fra =>
-    carry_close [hHP.frame.ldv, hG.ldv, hL.mbtowc, hL.mbMax, hE.fd, hE.cookie, hE.writer, toNat_add_neg, Nat.reducePow]
-  case ap => rw [toNat_add_lit (k := 24) (by omega)]; carry_close [hHP.frame.ldv, hV.ap]
-  case ra | s0 | s4 | s6 | flU | flS | cur | base | fl2 =>
-    carry_close [hHP.frame.ldv, hV.ra, hV.s0v, hV.s4v, hV.s6v, fprC, Nat.reduceEqDiff, reduceIte]
   all_goals carry_close [hH.keep, hV.keep, fprC, Nat.reduceEqDiff, reduceIte]
 
 #ix_chain fprintfHead_run := [fprintfHead_01, fprintfHead_02, fprintfHead_03]
