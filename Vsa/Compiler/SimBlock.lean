@@ -119,7 +119,7 @@ theorem run_leave {T : List String} {V : View} {st : St} {d : Nat} {env inner : 
   have he9 := hm.henv
   rw [View.fa_eq hF] at he9
   apply run_whole hR.fits hseg
-  wp_simp [he9.wp, toNat_ofNat_lt (show f < 2 ^ 64 by omega)]
+  wp_simp [he9.wp, toNat_ofNat_lt]
   refine ⟨by unfold LdOK; omega, reach_here ⟨by simp, hm.reenv ?_ (by reg_simp []; exact Keep.refl _ _)
     (by reg_simp []; rw [hfa.parent, parAddr_eq_parOf, hpar]; rfl) rfl rfl, rfl, rfl⟩⟩
   cases hm.chn with

@@ -504,8 +504,7 @@ theorem run_cc {L : GRegs} {m : Mem} {o : Array String} {r : BitVec 64} {p q h :
   obtain ⟨hxs, -, hxb⟩ := hx; obtain ⟨hys, -, hyb⟩ := hy
   have := hxs.lo; have := hxs.al; have := hys.lo; have := hys.al
   apply run_at' hR.fits hR.cc 0 ccPos rfl
-  wp_simp [rt_pos, ccCode, h11.wp, h13.wp, hr.wp, h8.wp, toNat_ofNat_lt (show p < 2 ^ 64 by omega),
-    toNat_ofNat_lt (show q < 2 ^ 64 by omega), toNat_ofNat_lt (show h < 2 ^ 64 by omega), hxs.len, hys.len,
+  wp_simp [rt_pos, ccCode, h11.wp, h13.wp, hr.wp, h8.wp, toNat_ofNat_lt, hxs.len, hys.len,
     show h ≠ tohostAddr by omega]
   refine ⟨⟨by omega, by omega, .inr (by omega)⟩, ⟨by omega, by omega, .inr (by omega)⟩, ?_⟩
   split

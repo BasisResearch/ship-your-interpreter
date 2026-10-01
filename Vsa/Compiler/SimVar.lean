@@ -141,7 +141,7 @@ theorem walk_read {F : FrMap} {H : CloMap} {s : Store} {m : Mem} {hF h : Nat} (h
       rw [hB.1, lookup_gas hs.parents x b a (hs.parents a fr b hfr hpar)]
       refine WP_sound hfit _ _ (fun L2 m2 o2 => Reaches code ⟨pcOf (pos + (readHere x Lf pos fin).length + 1),
         L2, m2, o2⟩ _) L1 _ _ s2 (fun L2 m2 o2 h => by simpa using h) ?_
-      wp_simp [hB.2.wp, toNat_ofNat_lt (show f0 < 2 ^ 64 by omega), hrd]
+      wp_simp [hB.2.wp, toNat_ofNat_lt, hrd]
       refine ⟨by unfold LdOK; omega, reaches_mono (ih _ fb _ _ (by simpa using hFb) s3
         (Has.set_self _ _ (by decide) (by decide))) ?_⟩
       rintro B ⟨hm, ho, hk', hB'⟩
