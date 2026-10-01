@@ -2,7 +2,7 @@ import VsaIris.Vsa.MallocTop
 import VsaIris.Vsa.HeapGrow
 import VsaIris.Vsa.Sbrk
 import VsaIris.Vsa.HeapPermit
-import VsaIris.Vsa.Carry
+import VsaIris.Vsa.MallocGlue
 
 namespace VsaIris.VsaHeap
 
@@ -206,10 +206,10 @@ theorem ext_top {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {M : Mem}
     sub_toInt hA h14 (by omega) (by omega)
   refine (step% st 0x80004e18) O.live (fun _ => ?k) (fun hc => absurd ?e hc)
   case e =>
-    carry_norm; rw [sltiV_eq_zero, hsub, show ((32#64 : BitVec 64)).toInt = (32 : Int) by decide]
+    upd_norm; rw [sltiV_eq_zero, hsub, show ((32#64 : BitVec 64)).toInt = (32 : Int) by decide]
     omega
   refine top_split O (F.of_regs ?_ ?_ ?_ ?_) Hp ⟨?_, ?_, ?_, ?_⟩ hnb hroom <;>
-    carry_close [h28, h14, h16, BitVec.toNat_sub, hA]
+    upd_norm [h28, h14, h16, BitVec.toNat_sub, hA] <;> omega
 
 theorem ext_grow {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt M : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb : Nat}
@@ -323,7 +323,7 @@ theorem null_tail {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {M : Mem}
     AW C.live C.S C.Q 0x80004e1c#64 R M := by
   sx_run [8] O.live at 0x8000484c
   refine epi_8000484c O (F.of_regs ?_ ?_ ?_ ?_) (O.fin_null ?_ ⟨_, _, _, _, Hp.heap⟩ Hp.pres Hp.frame hst) <;>
-    carry_close
+    upd_norm <;> decide
 
 theorem ext_null {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt M : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat} {nb : Nat}

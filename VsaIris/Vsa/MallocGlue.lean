@@ -1,4 +1,5 @@
-import VsaIris.Vsa.Carry
+import VsaIris.Vsa.AllocTac
+import VsaIris.Vsa.BvLits
 
 namespace VsaIris.VsaHeap
 
