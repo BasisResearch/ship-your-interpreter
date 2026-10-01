@@ -94,12 +94,6 @@ theorem tBlock {st : St} {d : Nat} {env : Addr} {ss : List Stmt} {store' : Store
 theorem At.mono {C : Ctx} {pos pos' : Nat} (h : At code C pos) (hle : pos ≤ pos') (hp : PosOK pos') :
     At code C pos' := ⟨h.lay, h.ne, h.nd, h.lt, h.nat, Nat.le_trans h.nextle hle, hp⟩
 
-private theorem At.afterT {C : Ctx} {pos : Nat} (hAt : At code C pos) {p : Nat} (s : Stmt) (hp : pos ≤ p) {q : Nat}
-    (hq : p + (cstmt C p s).1.length ≤ q) (hq' : PosOK q) : At code ⟨C.Γ, (cstmt C p s).2, C.brk, C.cont⟩ q :=
-  have hn := cstmt_next C p s
-  ⟨hAt.lay, hAt.ne, hAt.nd, fun i hi => Nat.lt_of_lt_of_le (hAt.lt i hi) hn.1, hAt.nat,
-    by show (cstmt C p s).2 ≤ q; have := hAt.nextle; omega, hq'⟩
-
 theorem condT {C : Ctx} {pos L : Nat} {c : Expr} {st st1 : St} {d : Nat} {env : Addr} {v : Value}
     {A : AM} (hAt : At code C pos) (hc : CondE C.Γ.names c)
     (hseg : Seg code pos (cexpr C.Γ 0 pos c ++ [.br .ne a0 0 (bSkip 1),
@@ -172,7 +166,7 @@ theorem tIfSome {st st1 st2 : St} {d : Nat} {env : Addr} {c : Expr} {s1 s2 : Stm
     | _ => exact ⟨B2, r1.trans r2, hpc2, hsr2, hsp1.trans hsp2, hret, hnorm⟩
   · rw [if_neg (by simp [hf])] at hpc1
     obtain ⟨B2, r2, hpc2, hsr2, hsp2, hret, hnorm⟩ := ih ⟨C.Γ, ct.2, C.brk, C.cont⟩ loop _ B1
-      (by have := hAt.afterT (p := pos + (cexpr C.Γ 0 pos c).length + 2) s1 (by omega) (Nat.le_succ _)
+      (by have := hAt.after (p := pos + (cexpr C.Γ 0 pos c).length + 2) s1 (by omega) (Nat.le_succ _)
             (by rw [hct]; exact hpe); rwa [hct] at this) hst2
       (by rw [hce]; exact g5) (by rw [hce]; exact hpend) hloop hpc1 hsr1
     rw [hce] at hpc2
@@ -290,7 +284,7 @@ theorem sConsStmt {st st1 st' : St} {d : Nat} {env : Addr} {s : Stmt} {ss : List
   obtain ⟨B1, r1, hpc1, hsr1, hsp1, hret1, hnorm1⟩ := h1 C loop pos A hAt hs1 hsg1 hp1 hloop hA hsr
   rcases hk with ⟨rfl, ih⟩ | ⟨hne, rfl, rfl⟩
   · obtain ⟨B2, r2, hpc2, hout2, hsp2, hret2, hnorm2, f', hc2, hΓ2⟩ :=
-      ih ⟨C.Γ, (cstmt C pos s).2, C.brk, C.cont⟩ loop _ B1 f g hΓ (hAt.afterT s (Nat.le_refl _) (Nat.le_refl _) hp1)
+      ih ⟨C.Γ, (cstmt C pos s).2, C.brk, C.cont⟩ loop _ B1 f g hΓ (hAt.after s (Nat.le_refl _) (Nat.le_refl _) hp1)
         hss hsg2 hp2 hloop hpc1 hsr1
     refine ⟨B2, r1.trans r2, by rw [hpc2]; cases t <;> simp only [exitPos] <;> congr 1 <;> omega,
       hout2, hsp1.trans hsp2, hret2, hnorm2, f', hc2, hΓ2⟩

@@ -15,6 +15,12 @@ structure At (code : List Ins) (C : Ctx) (pos : Nat) : Prop where
   nextle : C.next ≤ pos
   posok : PosOK pos
 
+theorem At.after {code : List Ins} {C : Ctx} {pos : Nat} (hAt : At code C pos) {p : Nat} (s : Stmt) (hp : pos ≤ p) {q : Nat}
+    (hq : p + (cstmt C p s).1.length ≤ q) (hq' : PosOK q) : At code ⟨C.Γ, (cstmt C p s).2, C.brk, C.cont⟩ q :=
+  have hn := cstmt_next C p s
+  ⟨hAt.lay, hAt.ne, hAt.nd, fun i hi => Nat.lt_of_lt_of_le (hAt.lt i hi) hn.1, hAt.nat,
+    by show (cstmt C p s).2 ≤ q; have := hAt.nextle; omega, hq'⟩
+
 def SR (Γ : Scope) (env : Addr) (st : St) (A : AM) : Prop :=
   Chain st.store A.mem env Γ ∧ outStr A = st.out
 

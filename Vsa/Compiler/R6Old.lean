@@ -9,12 +9,6 @@ open Vsa.While Vsa.Sim
 section
 variable {code : List Ins}
 
-theorem At.after {C : Ctx} {pos : Nat} (hAt : At code C pos) {p : Nat} (s : Stmt) (hp : pos ≤ p) {q : Nat}
-    (hq : p + (cstmt C p s).1.length ≤ q) (hq' : PosOK q) : At code ⟨C.Γ, (cstmt C p s).2, C.brk, C.cont⟩ q :=
-  have hn := cstmt_next C p s
-  ⟨hAt.lay, hAt.ne, hAt.nd, fun i hi => Nat.lt_of_lt_of_le (hAt.lt i hi) hn.1, hAt.nat,
-    by show (cstmt C p s).2 ≤ q; have := hAt.nextle; omega, hq'⟩
-
 theorem Fail.cond {n : Nat} {C : Ctx} {pos L : Nat} {c : Expr} {st : St} {d : Nat} {env : Addr} {A : AM}
     (hAt : At code C pos) (hc : CondE C.Γ.names c) (s1 : Seg code pos (cexpr C.Γ 0 pos c))
     (s2 : Seg code (pos + (cexpr C.Γ 0 pos c).length)
