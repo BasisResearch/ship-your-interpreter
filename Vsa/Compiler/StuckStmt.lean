@@ -1,4 +1,5 @@
 import Vsa.Compiler.StuckCall
+import Vsa.Compiler.R6Stuck
 
 namespace Vsa.Compiler
 
@@ -84,37 +85,17 @@ theorem fIfSome {c : Expr} {t e : Stmt} (ihc : ∀ st, EStuck code T n st d env 
     (iht : ∀ st, SStuck code T n st d env t) (ihe : ∀ st, SStuck code T n st d env e) :
     SStuck code T n st d env (.ifStmt c t (some e)) := by
   intro V C sp fs pos A hm hA hwf hctx hseg hP htmp hne
-  obtain ⟨hwc, hwt, hwe⟩ := hwf
   simp only [tS] at htmp
-  simp only [gstmt] at hseg hP
-  obtain ⟨h5, sce⟩ := hseg.append
-  obtain ⟨h4, -⟩ := h5.append
-  obtain ⟨hcond, sct⟩ := h4.append
-  simp only [List.length_append, List.length_singleton, jmpIfZero, List.length_cons, List.length_nil] at sct sce hP
-  have sct := sct.cast (pos' := pos + (gexpr T C.Γ 0 pos c).length + 3) (by omega)
-  have sce := sce.cast (pos' := pos + (gexpr T C.Γ 0 pos c).length + 3 + (gstmt T C (pos + (gexpr T C.Γ 0 pos c).length
-    + 3) t).length + 1) (by omega)
-  by_cases hec : HasE st d env c
-  rotate_left
-  · obtain ⟨s12, -⟩ := hcond.append
-    obtain ⟨s1, -⟩ := s12.append
-    exact ihc st V C.Γ sp fs 0 pos A hm hA hwc s1 (posOK_le hP (by omega)) (by omega) hec
-  obtain ⟨st1, v, Dc⟩ := hec
-  obtain ⟨nc, hE⟩ := spec_e hR (T := T) Dc
-  apply Fail.of_reaches
-  refine ex_bind (run_cond hR hE hm hA hwc hcond (posOK_le hP (by omega)) (posOK_le hP (by omega)) (by omega)) ?_
-  rintro B (⟨h1, -⟩ | ⟨V1, hp1⟩)
-  · exact reach_here (fail_err hR h1)
-  cases hvt : v.truthy
-  · rw [hvt] at hp1
-    simp only [Bool.false_eq_true, if_false] at hp1
-    obtain ⟨hpc1, hm1⟩ := hp1.out
-    exact reach_here (ihe st1 V1 C sp fs _ B hm1 hpc1 hwe hctx sce (posOK_le hP (by omega)) (by omega)
-      (fun ⟨st2, t2, D⟩ => hne ⟨st2, t2, .ifFalse _ _ _ _ _ _ _ _ _ _ Dc hvt D⟩))
-  · rw [hvt, if_pos rfl] at hp1
-    obtain ⟨hpc1, hm1⟩ := hp1.out
-    exact reach_here (iht st1 V1 C sp fs _ B hm1 hpc1 hwt hctx sct (posOK_le hP (by omega)) (by omega)
-      (fun ⟨st2, t2, D⟩ => hne ⟨st2, t2, .ifTrue _ _ _ _ _ _ _ _ _ _ Dc hvt D⟩))
+  have h := And.intro hseg hP
+  simp only [gstmt, jmpIfZero, List.append_assoc, ↓segP_app, List.length_cons, List.length_nil, Nat.zero_add,
+    Nat.reduceAdd] at h
+  obtain ⟨⟨s1, -⟩, ⟨s2, -⟩, ⟨s3, p3⟩, ⟨s4, p4⟩, ⟨-, p5⟩, s6, p6⟩ := h
+  refine EStuck.cond hR (ihc st) hm hA hwf.1 s1 s2 s3 p3 p5 (by omega) fun st1 v V1 B Dc hm1 hpc => ?_
+  cases hvt : v.truthy <;> simp only [hvt, Bool.cond_true, Bool.cond_false] at hpc
+  · exact ihe st1 V1 C sp fs _ B hm1 hpc hwf.2.2 hctx s6 p6 (by omega)
+      (fun ⟨st2, t2, D⟩ => hne ⟨st2, t2, .ifFalse _ _ _ _ _ _ _ _ _ _ Dc hvt D⟩)
+  · exact iht st1 V1 C sp fs _ B hm1 hpc hwf.2.1 hctx s4 p4 (by omega)
+      (fun ⟨st2, t2, D⟩ => hne ⟨st2, t2, .ifTrue _ _ _ _ _ _ _ _ _ _ Dc hvt D⟩)
 
 theorem fWhile {c : Expr} {b : Stmt} (ihc : ∀ st, EStuck code T n st d env c)
     (ihb : ∀ st, SStuck code T n st d env b) (IHn : ∀ m < n, ∀ st, SStuck code T m st d env (.whileStmt c b)) :

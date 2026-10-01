@@ -1,5 +1,6 @@
 import Vsa.Compiler.StmtT
 import Vsa.Compiler.Fail
+import Vsa.Compiler.R6Old
 
 namespace Vsa.Compiler
 
@@ -77,34 +78,16 @@ theorem fIfSome₀ {n : Nat} {st : St} {d : Nat} {env : Addr} {c : Expr} {s1 s2 
     (ih1 : ∀ st', SFail code n st' d env s1) (ih2 : ∀ st', SFail code n st' d env s2) :
     SFail code n st d env (.ifStmt c s1 (some s2)) := by
   intro C loop pos A hAt hs hseg hpos hloop hA hsr hne
-  obtain ⟨hc, hst1, hst2⟩ := hs
   rw [cstmt_ifSome] at hseg hpos
-  dsimp only at hseg hpos
-  generalize hct : cstmt C (pos + (cexpr C.Γ 0 pos c).length + 2) s1 = ct at hseg hpos
-  generalize hce : cstmt ⟨C.Γ, ct.2, C.brk, C.cont⟩ (pos + (cexpr C.Γ 0 pos c).length + 2 +
-    ct.1.length + 1) s2 = ce at hseg hpos
-  simp only [List.length_append, List.length_cons, List.length_nil] at hpos
-  obtain ⟨hs1234, hs5⟩ := hseg.append
-  obtain ⟨hs123, hs4⟩ := hs1234.append
-  obtain ⟨hs12, hs3⟩ := hs123.append
-  simp only [List.length_append, List.length_cons, List.length_nil] at hs5 hs4 hs3
-  have hpe : PosOK (pos + (cexpr C.Γ 0 pos c).length + 2 + ct.1.length + 1) := by unfold PosOK at *; omega
-  obtain ⟨B1, r1, hB1⟩ := sim_cond (d := d) hAt hc hs12 hpe hA hsr
-  rcases hB1 with ⟨st1, v, hev, hsr1, -, hpc1⟩ | ⟨hh, -⟩
-  · by_cases ht : v.truthy
-    · rw [if_pos ht] at hpc1
-      exact Fail.of_star r1 (ih1 st1 C loop _ B1 (hAt.mono (by omega) (by unfold PosOK at *; omega))
-        hst1 (by rw [hct]; exact Seg.pos_eq (by omega) hs3) (by rw [hct]; unfold PosOK at *; omega)
-        hloop hpc1 hsr1 (fun ⟨st', t, D⟩ => hne ⟨st', t, .ifTrue _ _ _ _ _ _ _ _ _ _ hev ht D⟩))
-    · rw [if_neg ht] at hpc1
-      have hle := (cstmt_next C (pos + (cexpr C.Γ 0 pos c).length + 2) s1)
-      rw [hct] at hle
-      exact Fail.of_star r1 (ih2 st1 ⟨C.Γ, ct.2, C.brk, C.cont⟩ loop _ B1
-        ⟨hAt.lay, hAt.ne, hAt.nd, fun i hi => Nat.lt_of_lt_of_le (hAt.lt i hi) hle.1, hAt.nat,
-          by show ct.2 ≤ _; have := hAt.nextle; omega, hpe⟩ hst2
-        (by rw [hce]; exact Seg.pos_eq (by omega) hs5) (by rw [hce]; unfold PosOK at *; omega) hloop
-        hpc1 hsr1 (fun ⟨st', t, D⟩ => hne ⟨st', t, .ifFalse _ _ _ _ _ _ _ _ _ _ hev (by simpa using ht) D⟩))
-  · exact .inl ⟨B1, r1, hh⟩
+  have h := And.intro hseg hpos
+  simp only [List.append_assoc, ↓segP_app, List.length_cons, List.length_nil, Nat.zero_add, Nat.reduceAdd] at h
+  obtain ⟨⟨g1, -⟩, ⟨g2, p2⟩, ⟨g3, p3⟩, ⟨-, p4⟩, g5, p5⟩ := h
+  refine Fail.cond (d := d) hAt hs.1 g1 g2 p4 hA hsr fun st1 v B1 hev hsr1 hpc1 => ?_
+  cases ht : v.truthy <;> simp only [ht, Bool.cond_true, Bool.cond_false] at hpc1
+  · exact ih2 st1 _ loop _ B1 (hAt.after s1 (by omega) (by omega) p4) hs.2.2 g5 p5 hloop hpc1 hsr1
+      (fun ⟨st', t, D⟩ => hne ⟨st', t, .ifFalse _ _ _ _ _ _ _ _ _ _ hev ht D⟩)
+  · exact ih1 st1 C loop _ B1 (hAt.mono (by omega) p2) hs.2.1 g3 p3 hloop hpc1 hsr1
+      (fun ⟨st', t, D⟩ => hne ⟨st', t, .ifTrue _ _ _ _ _ _ _ _ _ _ hev ht D⟩)
 
 theorem fWhile₀ {n : Nat} {st : St} {d : Nat} {env : Addr} {c : Expr} {b : Stmt}
     (ihb : ∀ st', SFail code n st' d env b)
@@ -210,21 +193,14 @@ theorem fCons₀ {n : Nat} {st : St} {d : Nat} {env : Addr} {s : Stmt} {ss : Lis
   intro C loop pos A f g hΓ hAt hs hseg hpos hloop hA hsr hne
   obtain ⟨hs1, hss⟩ := SupSeq_other hd hs
   rw [cseq_other C pos s ss hd] at hseg hpos
-  dsimp only at hseg hpos
-  obtain ⟨hsg1, hsg2⟩ := hseg.append
-  simp only [List.length_append] at hpos
-  have hp1 : PosOK (pos + (cstmt C pos s).1.length) := by unfold PosOK at *; omega
+  obtain ⟨⟨hsg1, hp1⟩, hsg2, hp2⟩ := segP_app.mp ⟨hseg, hpos⟩
   by_cases hex : HasExec st d env s
   · obtain ⟨st1, t1, D⟩ := hex
     by_cases ht1 : t1 = .normal
     · subst ht1
-      obtain ⟨B1, r1, hpc1, hsr1, -, -, -⟩ := stmtT (code := code) D C loop pos A hAt hs1 hsg1 hp1 hloop hA hsr
-      have hn := cstmt_next C pos s
-      exact Fail.of_star r1 (ihss st1 ⟨C.Γ, (cstmt C pos s).2, C.brk, C.cont⟩ loop _ B1 f g hΓ
-        ⟨hAt.lay, hAt.ne, hAt.nd, fun i hi => Nat.lt_of_lt_of_le (hAt.lt i hi) hn.1, hAt.nat,
-          by show (cstmt C pos s).2 ≤ _; have := hAt.nextle; omega, hp1⟩
-        hss hsg2 (by rw [← Nat.add_assoc] at hpos; exact hpos) hloop hpc1 hsr1
-        (fun ⟨st', t, D'⟩ => hne ⟨st', t, .consNormal _ _ _ _ _ _ _ _ D D'⟩))
+      refine (stmtT D).fail hAt hs1 hsg1 hp1 hloop hA hsr fun B1 hpc1 hsr1 => ?_
+      exact ihss st1 _ loop _ B1 f g (by exact hΓ) (hAt.after s (Nat.le_refl _) (Nat.le_refl _) hp1) hss hsg2 hp2 hloop
+        hpc1 hsr1 (fun ⟨st', t, D'⟩ => hne ⟨st', t, .consNormal _ _ _ _ _ _ _ _ D D'⟩)
     · exact absurd ⟨st1, t1, .consAbrupt _ _ _ _ _ _ _ D ht1⟩ hne
   · exact ihs st C loop pos A hAt hs1 hsg1 hp1 hloop hA hsr hex
 
