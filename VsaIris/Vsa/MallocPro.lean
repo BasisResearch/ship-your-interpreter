@@ -18,8 +18,6 @@ structure MEntry (C : MCtx) (R : Nat → BitVec 64) : Prop where
   s2 : R 18 = C.rv0 18
   s3 : R 19 = C.rv0 19
 
-theorem errno_foot {H : List (Nat × Nat)} : ∀ k, k < 4 → vsaFoot H (0x8001b538 + k) :=
-  fun k hk => .inl (.inr (.inl ⟨by omega, by omega⟩))
 
 theorem malloc_errno {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {Mt : Mem}
     {brkv : Nat} {chunks : List Chunk} {bins : Nat → List Nat}

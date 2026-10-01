@@ -12,8 +12,6 @@ def exitCode : List (BitVec 8) :=
 
 theorem exitCode_text : TextAt exitCodeBase exitCode := by decide +kernel
 
-def exitCodeLoaded (m : Std.ExtHashMap Nat (BitVec 8)) : Prop :=
-  ∀ k, k < 44 → m[exitCodeBase + k]? = some (exitCode.getD k 0)
 
 abbrev exitCodeEBase : Nat := 0x80000180
 def exitCodeE : List (BitVec 8) :=

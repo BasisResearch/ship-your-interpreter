@@ -146,18 +146,6 @@ theorem WOK.foot {C : MCtx} (O : WOK C) {a w : Nat} (h : ∀ k, k < w → vsaFoo
   obtain ⟨j, hj, rfl⟩ := List.mem_map.mp hb
   exact O.own _ (.inl (h j (List.mem_range.mp hj)))
 
-theorem WOK.foot_at {C : MCtx} (O : WOK C) {a' : Nat} (h : ∀ k, k < 8 → vsaFoot C.H (a' + k)) :
-    ∀ a, a = a' → ∀ b ∈ accAddrs a 8, C.S b := by
-  intro a he; subst he; exact O.foot h
-
-theorem WOK.glob {C : MCtx} (O : WOK C) {a : Nat} (h1 : 0x8001ad10 ≤ a) (h2 : a + 8 ≤ 0x8001b520) :
-    ∀ b ∈ accAddrs a 8, C.S b :=
-  O.foot fun k hk => .inl (.inl ⟨by omega, by omega⟩)
-
-theorem WOK.bin_link {C : MCtx} (O : WOK C) {j a : Nat} (hj : j < numBins)
-    (ha : a = binAt j + 16 ∨ a = binAt j + 24) : ∀ b ∈ accAddrs a 8, C.S b := by
-  have := binAt_geo j hj
-  rcases ha with rfl | rfl <;> exact O.glob (by omega) (by omega)
 
 theorem MOK.stack {C : MCtx} (O : MOK C) {a w : Nat} (h1 : C.s.toNat - mHead ≤ a)
     (h2 : a + w ≤ C.s.toNat) : ∀ b ∈ accAddrs a w, C.S b := O.toWOK.stack h1 h2
@@ -171,14 +159,6 @@ macro_rules
 macro_rules
   | `(tactic| sx_side) => `(tactic| (refine VsaIris.VsaHeap.MOK.foot ‹VsaIris.VsaHeap.MOK _› (fun k hk => Or.inl ?_); unfold VsaIris.VsaHeap.allocGlobal VsaIris.VsaHeap.InRange; omega))
 
-theorem MHeap.off_stack {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
-    {bins : Nat → List Nat} (Hp : MHeap C Mt brkv chunks bins) {a : Nat}
-    (hf : ∀ k, k < 8 → vsaFoot C.H (a + k)) :
-    a + 8 ≤ C.s.toNat - mHead ∨ C.s.toNat ≤ a := by
-  refine Classical.byContradiction fun hc => ?_
-  have hk : (if a ≥ C.s.toNat - mHead then 0 else C.s.toNat - mHead - a) < 8 := by
-    split <;> omega
-  exact Hp.disj _ (by split <;> omega) (by unfold mHead at *; split <;> omega) (hf _ hk)
 
 theorem glob_off_of {H : List (Nat × Nat)} {s : BitVec 64}
     (hd : ∀ a, s.toNat - mHead ≤ a → a < s.toNat → ¬ vsaFoot H a) :
@@ -202,19 +182,6 @@ theorem MHeap.glob_off {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
       (C.s.toNat ≤ 0x8001b960 ∨ 0x8001ba68 + mHead ≤ C.s.toNat) :=
   glob_off_of Hp.disj
 
-theorem MHeap.off_stack_w {C : MCtx} {Mt : Mem} {brkv : Nat} {chunks : List Chunk}
-    {bins : Nat → List Nat} (Hp : MHeap C Mt brkv chunks bins) {a w : Nat} (hw : 0 < w)
-    (hf : ∀ k, k < w → vsaFoot C.H (a + k)) :
-    a + w ≤ C.s.toNat - mHead ∨ C.s.toNat ≤ a := by
-  refine Classical.byContradiction fun hc => ?_
-  have hm : 0 < mHead := by unfold mHead; omega
-  by_cases h : C.s.toNat - mHead ≤ a
-  · have := hf 0 hw
-    rw [Nat.add_zero] at this
-    exact Hp.disj a h (by omega) this
-  · have := hf (C.s.toNat - mHead - a) (by omega)
-    rw [show a + (C.s.toNat - mHead - a) = C.s.toNat - mHead by omega] at this
-    exact Hp.disj _ (Nat.le_refl _) (by omega) this
 
 theorem frame_store {C : MCtx} {Mt : Mem} {a w : Nat} {v : BitVec 64}
     (hw : ∀ b, a ≤ b → b < a + w → MWin C.H C.s b)
@@ -225,12 +192,6 @@ theorem frame_store {C : MCtx} {Mt : Mem} {a w : Nat} {v : BitVec 64}
     (by simp only at hc; omega)), trivial⟩
   rw [writeLog_out _ _ _ ho, hf b hb]
 
-theorem win_foot {H : List (Nat × Nat)} {s : BitVec 64} {a : Nat}
-    (hf : ∀ k, k < 8 → vsaFoot H (a + k)) : ∀ b, a ≤ b → b < a + 8 → MWin H s b := by
-  intro b h1 h2
-  have := hf (b - a) (by omega)
-  rw [show a + (b - a) = b by omega] at this
-  exact .inl this
 
 theorem win_stack {H : List (Nat × Nat)} {s : BitVec 64} {a w : Nat} (h1 : s.toNat - mHead ≤ a)
     (h2 : a + w ≤ s.toNat) : ∀ b, a ≤ b → b < a + w → MWin H s b :=

@@ -15,12 +15,8 @@ def Links (m : Mem) : List Nat → Prop
 
 def Ring (m : Mem) (b : Nat) (qs : List Nat) : Prop := Links m (b :: qs ++ [b])
 
-@[simp] theorem links_nil (m : Mem) : Links m [] := trivial
 @[simp] theorem links_single (m : Mem) (x : Nat) : Links m [x] := trivial
 
-theorem links_cons_cons {m : Mem} {x y : Nat} {rest : List Nat} :
-    Links m (x :: y :: rest) ↔ fdOf m x = some y ∧ bkOf m y = some x ∧ Links m (y :: rest) :=
-  Iff.rfl
 
 theorem links_append {m : Mem} :
     ∀ (l₁ : List Nat) (x : Nat) (l₂ : List Nat),

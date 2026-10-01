@@ -36,11 +36,6 @@ theorem binfd_toNat {x : BitVec 64} {j : Nat} (hx : x.toNat = j) (hj : j < 2 ^ 2
   simp only [BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
   omega
 
-theorem out_of_foot {H : List (Nat × Nat)} {a b w : Nat} (hnf : ¬ vsaFoot H a)
-    (hf : ∀ k, k < w → vsaFoot H (b + k)) : a < b ∨ b + w ≤ a :=
-  Classical.byContradiction fun hc => hnf (by
-    have := hf (a - b) (by omega)
-    rwa [show b + (a - b) = a by omega] at this)
 
 theorem head_node_MallocRebin {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} (B : BlockHeapAt m H top brkv chunks bins) {j f : Nat} (hj0 : 0 < j)

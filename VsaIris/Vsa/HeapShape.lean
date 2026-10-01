@@ -27,8 +27,6 @@ structure BlockHeapAt (m : Mem) (H : List (Nat × Nat)) (top brkv : Nat)
   heap : HeapAt m H (fun e => e ∈ H) top brkv chunks bins
   top_room : top + 16 ≤ brkv
 
-def BlockHeap (m : Mem) (H : List (Nat × Nat)) : Prop :=
-  ∃ top brkv chunks bins, BlockHeapAt m H top brkv chunks bins
 
 theorem _root_.Vsa.Sim.DlHeap.ChunkWalk.head_or_top {m : Mem} {p top : Nat} {cs : List Chunk}
     (h : ChunkWalk m p top cs) : p = top ∨ ∃ c ∈ cs, c.addr = p := by
@@ -287,15 +285,6 @@ theorem BlockHeapAt.block_arena {m : Mem} {H : List (Nat × Nat)} {top brkv : Na
 def ImgOn (S : Nat → Prop) (img : Nat → BitVec 8) (m : Mem) : Prop :=
   ∀ a, S a → m[a]? = some (img a)
 
-def imgShape (img : Nat → BitVec 8) (H : List (Nat × Nat)) : Prop :=
-  ∃ m, ImgOn (vsaFoot H) img m ∧ BlockHeap m H
-
-def vsaLayout : DlLayout where
-  global := allocGlobal
-  lo := heapStart
-  hi := heapEnd
-  global_off_arena := allocGlobal_off_arena
-  Shape := imgShape
 
 def inuseBlocks (chunks : List Chunk) : List (Nat × Nat) :=
   chunks.filterMap fun c => if c.inuse then some (c.addr + 16, c.size - 8) else none

@@ -348,10 +348,6 @@ theorem take_ret {C : MCtx} {Mt M : Mem} {brkv : Nat} {chunks : List Chunk}
   obtain ⟨hfr, hal16⟩ := PHeapAt.take_fresh Hp.heap hfree rfl (n := C.n.toNat) hn8
   exact ⟨hfr, hal16, ⟨_, _, _, _, hheap, by omega, Hp.live.map_reflag _⟩, hpres, hframe⟩
 
-theorem fin_take_at {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {M : Mem} {v : Nat}
-    (T : TakeRet C M v) (hregs : MRegs C R) (h10 : (R 10).toNat = v + 16) :
-    AW C.live C.S C.Q (R 1) R M := by
-  rw [hregs.ra]; exact O.fin_take h10 T R hregs (fun _ _ _ _ => rfl)
 
 theorem lscan_fin {C : MCtx} (O : MOK C) {R : Nat → BitVec 64} {M : Mem} {v : Nat}
     (F : MFrame C R M) (h15 : (R 15).toNat = v) (hv : v < 2 ^ 32)

@@ -28,16 +28,6 @@ theorem trimE {x : BitVec 64} {t : Nat} (hx : x.toNat = t + 4063) (ht : t < 2 ^ 
   unfold trimExtra
   split <;> split <;> omega
 
-theorem PHeapAt.store_stack {C : MCtx} {M : Mem} {top brkv : Nat} {chunks : List Chunk}
-    {bins : Nat → List Nat} (h : PHeapAt M C.H top brkv chunks bins)
-    (hd : ∀ a, C.s.toNat - mHead ≤ a → a < C.s.toNat → ¬ vsaFoot C.H a) {a w : Nat} {v : BitVec 64}
-    (h1 : C.s.toNat - mHead ≤ a) (h2 : a + w ≤ C.s.toNat) :
-    PHeapAt (writeLog M [(a, w, v)]) C.H top brkv chunks bins :=
-  h.transport_read fun x hx => by
-    have ho : OutL [(a, w, v)] x := ⟨Classical.byContradiction fun hc => by
-      simp only at hc
-      exact hd x (by omega) (by omega) hx.1, trivial⟩
-    rw [writeLog_out _ _ _ ho]
 
 structure TrimIn (C : MCtx) (R : Nat → BitVec 64) (Mt : Mem) (Y brkv : Nat) (chunks : List Chunk)
     (bins : Nat → List Nat) : Prop where

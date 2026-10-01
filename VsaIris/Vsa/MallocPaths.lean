@@ -32,13 +32,6 @@ structure LRRegs (nb idx : Nat) (R : Nat → BitVec 64) : Prop where
   a7 : (R 17).toNat = idx
   a6 : R 16 = 0x8001ad10#64
 
-theorem ldv_eq_of_read {Mt : Mem} {a a' : Nat} {v : BitVec 64} (he : a = a')
-    (h : read64 Mt a' = some v.toNat) : ldv .ld Mt a = v := by
-  subst he; exact ldv_ld h
-
-theorem bin_link_ld {Mt : Mem} {a a' l : Nat} (he : a = a') (h : read64 Mt a' = some l)
-    (hl : l < 2 ^ 64) : ldv .ld Mt a = BitVec.ofNat 64 l :=
-  ldv_eq_of_read he (by rw [h, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hl])
 
 theorem toNat_sx32_small (x : BitVec 64) (h : x.toNat < 2 ^ 31) :
     (BitVec.signExtend 64 (BitVec.extractLsb 31 0 x)).toNat = x.toNat := by

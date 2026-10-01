@@ -66,13 +66,6 @@ theorem MMKeep.of_eq {R R' R'' : Nat → BitVec 64} (h : MMKeep R R') (e1 : R'' 
 macro "mm_keep" h:term : tactic => `(tactic| (refine MMKeep.of_eq $h ?_ ?_ ?_ ?_ ?_ ?_ ?_ <;>
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]))
 
-theorem MMKeep.upd {R R' : Nat → BitVec 64} (h : MMKeep R R') {k : Nat} (v : BitVec 64)
-    (hk : k ≠ 1 ∧ k ≠ 2 ∧ k ≠ 8 ∧ k ≠ 9 ∧ k ≠ 10 ∧ k ≠ 18 ∧ k ≠ 19) : MMKeep R (upd R' k v) := by
-  obtain ⟨h1, h2, h8, h9, h10, h18, h19⟩ := hk
-  exact ⟨by rw [upd_other _ _ (Ne.symm h1)]; exact h.ra, by rw [upd_other _ _ (Ne.symm h2)]; exact h.sp,
-    by rw [upd_other _ _ (Ne.symm h8)]; exact h.s0, by rw [upd_other _ _ (Ne.symm h9)]; exact h.s1,
-    by rw [upd_other _ _ (Ne.symm h10)]; exact h.a0, by rw [upd_other _ _ (Ne.symm h18)]; exact h.s2,
-    by rw [upd_other _ _ (Ne.symm h19)]; exact h.s3⟩
 
 section Loops
 

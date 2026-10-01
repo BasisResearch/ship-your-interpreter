@@ -36,11 +36,6 @@ theorem FBin.read {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂ : L
     read64 Mt w = read64 M2 w :=
   read64_keep fun k hk => B.agree _ (hf k hk) (by omega)
 
-theorem FBin.off_stack {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
-    {bins : Nat → List Nat} (B : FBin C Mt M2 X S top brkv cs₁ cs₂ bins) {a : Nat}
-    (hf : ∀ k, k < 8 → vsaFoot C.H (a + k)) :
-    a + 8 ≤ C.s.toNat - mHead ∨ C.s.toNat ≤ a :=
-  (⟨hf⟩ : Rgn (vsaFoot C.H) a 8).offStack B.disj (by decide)
 
 theorem foot_of_chunk {m : Mem} {H : List (Nat × Nat)} {top brkv : Nat} {chunks : List Chunk}
     {bins : Nat → List Nat} (h : PHeapAt m H top brkv chunks bins) {X S : Nat}
@@ -64,8 +59,6 @@ theorem FBin.foot_chunk {C : MCtx} {Mt M2 : Mem} {X S top brkv : Nat} {cs₁ cs�
     (h1 : X + 8 ≤ a) (h2 : a < X + S + 8) : vsaFoot C.H a :=
   foot_of_chunk B.heap (by simp) B.hno h1 h2
 
-theorem read64_miss' {Mt : Mem} {a b : Nat} {v : BitVec 64} (h : a + 8 ≤ b ∨ b + 8 ≤ a) :
-    read64 (writeLog Mt [(b, 8, v)]) a = read64 Mt a := read64_store_miss Mt v h
 
 theorem fb_release {C : MCtx} {Mt M2 Mf : Mem} {X S top brkv : Nat} {cs₁ cs₂ : List Chunk}
     {bins : Nat → List Nat} (B : FBinCore C Mt M2 X S top brkv cs₁ cs₂ bins)

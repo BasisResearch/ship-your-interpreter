@@ -25,14 +25,6 @@ macro "pv_keep" h:term : tactic => `(tactic| (refine ⟨?_, ?_, ?_, ?_, ?_, ?_, 
   first | exact ($h).sp | exact ($h).t1 | exact ($h).s1 | exact ($h).a3 | exact ($h).a5 |
     exact ($h).a6 | exact ($h).a7 | exact ($h).s2 | exact ($h).s3))
 
-theorem PVKeep.upd {R R' : Nat → BitVec 64} (K : PVKeep R R') {k : Nat} (v : BitVec 64)
-    (h2 : k ≠ 2) (h6 : k ≠ 6) (h9 : k ≠ 9) (h13 : k ≠ 13) (h15 : k ≠ 15)
-    (h16 : k ≠ 16) (h17 : k ≠ 17) (h18 : k ≠ 18) (h19 : k ≠ 19) : PVKeep R (upd R' k v) :=
-  ⟨by rw [upd_other _ _ (Ne.symm h2)]; exact K.sp, by rw [upd_other _ _ (Ne.symm h6)]; exact K.t1,
-    by rw [upd_other _ _ (Ne.symm h9)]; exact K.s1, by rw [upd_other _ _ (Ne.symm h13)]; exact K.a3,
-    by rw [upd_other _ _ (Ne.symm h15)]; exact K.a5, by rw [upd_other _ _ (Ne.symm h16)]; exact K.a6,
-    by rw [upd_other _ _ (Ne.symm h17)]; exact K.a7, by rw [upd_other _ _ (Ne.symm h18)]; exact K.s2,
-    by rw [upd_other _ _ (Ne.symm h19)]; exact K.s3⟩
 
 theorem pvA_tail3 {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p ∈ allocText, live p.1)
     {R0 R : Nat → BitVec 64} {j : Nat} (h8 : (R 8).toNat = s + 8 * j) (h14 : (R 14).toNat = d + 8 * j)

@@ -10,30 +10,6 @@ section Copy
 
 variable {live : Nat → Prop} {S : Nat → Prop} {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
 
-theorem cp_pair {rT rS rD : Nat} (hTD : rD ≠ rT) {pcL pcS pcN : BitVec 64} {offL offS : BitVec 12}
-    {R : Nat → BitVec 64} {M0 : Mem} {d s j : Nat}
-    (stL : ∀ {R : Nat → BitVec 64} {Mt : Mem},
-      LdOK ((R rS) + sign_extend (m := 64) offL).toNat 8 →
-      (∀ b ∈ accAddrs ((R rS) + sign_extend (m := 64) offL).toNat 8, S b) →
-      AW live S Q pcS (upd R rT (ldv .ld Mt ((R rS) + sign_extend (m := 64) offL).toNat)) Mt →
-      AW live S Q pcL R Mt)
-    (stS : ∀ {R : Nat → BitVec 64} {Mt : Mem},
-      StOK ((R rD) + sign_extend (m := 64) offS).toNat 8 →
-      (∀ b ∈ accAddrs ((R rD) + sign_extend (m := 64) offS).toNat 8, S b) →
-      AW live S Q pcN R (writeLog Mt [(((R rD) + sign_extend (m := 64) offS).toNat, 8, (R rT))]) →
-      AW live S Q pcS R Mt)
-    (hL : (R rS + sign_extend (m := 64) offL).toNat = s + 8 * j)
-    (hS : (R rD + sign_extend (m := 64) offS).toNat = d + 8 * j)
-    (hl1 : LdOK (s + 8 * j) 8) (hl2 : ∀ b ∈ accAddrs (s + 8 * j) 8, S b)
-    (hs1 : StOK (d + 8 * j) 8) (hs2 : ∀ b ∈ accAddrs (d + 8 * j) 8, S b)
-    (hk : AW live S Q pcN (upd R rT (ldv .ld (copyW M0 d s j) (s + 8 * j))) (copyW M0 d s (j + 1))) :
-    AW live S Q pcL R (copyW M0 d s j) := by
-  refine stL (by rw [hL]; exact hl1) (by rw [hL]; exact hl2) ?_
-  have hS' : ((upd R rT (ldv .ld (copyW M0 d s j) (R rS + sign_extend (m := 64) offL).toNat)) rD +
-      sign_extend (m := 64) offS).toNat = d + 8 * j := by rw [upd_other _ _ hTD]; exact hS
-  refine stS (by rw [hS']; exact hs1) (by rw [hS']; exact hs2) ?_
-  rw [hS', upd_same, hL, ← copyW_succ]
-  exact hk
 
 theorem mal_tail3 {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p ∈ allocText, live p.1)
     {R : Nat → BitVec 64} {j : Nat} (h14 : (R 14).toNat = s + 8 * j) (h15 : (R 15).toNat = d + 8 * j)
@@ -47,29 +23,6 @@ theorem mal_tail3 {M0 : Mem} {d s L : Nat} (A : CPArgs S d s L) (hlive : ∀ p �
   cp_norm
   exact hk _ fun x h12 h14 => by simp only [upd_apply, h12, h14, ite_false]
 
-theorem aw_forget {pc : BitVec 64} {R : Nat → BitVec 64} {Mt : Mem}
-    (P : (Nat → BitVec 64) → Prop) (hP : P R) (hk : ∀ R', P R' → AW live S Q pc R' Mt) :
-    AW live S Q pc R Mt := hk R hP
-
-structure CPKeep (R R' : Nat → BitVec 64) : Prop where
-  sp : R' 2 = R 2
-  s0 : R' 8 = R 8
-  s1 : R' 9 = R 9
-  a0 : R' 10 = R 10
-  a2 : R' 12 = R 12
-  a3 : R' 13 = R 13
-  a5 : R' 15 = R 15
-  s2 : R' 18 = R 18
-  s3 : R' 19 = R 19
-
-theorem CPKeep.upd {R R' : Nat → BitVec 64} (K : CPKeep R R') {k : Nat} (v : BitVec 64)
-    (h2 : k ≠ 2) (h8 : k ≠ 8) (h9 : k ≠ 9) (h10 : k ≠ 10) (h12 : k ≠ 12) (h13 : k ≠ 13) (h15 : k ≠ 15)
-    (h18 : k ≠ 18) (h19 : k ≠ 19) : CPKeep R (upd R' k v) :=
-  ⟨by rw [upd_other _ _ (Ne.symm h2)]; exact K.sp, by rw [upd_other _ _ (Ne.symm h8)]; exact K.s0,
-    by rw [upd_other _ _ (Ne.symm h9)]; exact K.s1, by rw [upd_other _ _ (Ne.symm h10)]; exact K.a0,
-    by rw [upd_other _ _ (Ne.symm h12)]; exact K.a2, by rw [upd_other _ _ (Ne.symm h13)]; exact K.a3,
-    by rw [upd_other _ _ (Ne.symm h15)]; exact K.a5, by rw [upd_other _ _ (Ne.symm h18)]; exact K.s2,
-    by rw [upd_other _ _ (Ne.symm h19)]; exact K.s3⟩
 
 macro "cp_keep" h:term : tactic => `(tactic| (refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
   simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] <;>

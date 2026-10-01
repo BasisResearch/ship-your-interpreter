@@ -10,8 +10,7 @@ the words it must keep, and its byte window. `Realises H m m' p` says the memory
 actual `writeLog`: the window check is one key goal per store (`wl_win`, over the
 key-list view `LogIn` of `Region.lean`), the reads are one `rd_log` call. One
 soundness theorem per edit (`PHeapAt.split_permit`, `.unlink_permit`,
-`.absorb_permit`) wraps the existing per-operation lemma. `Realises.seq_agree`
-composes two edits' windows.
+`.absorb_permit`) wraps the existing per-operation lemma.
 
 The local facts of a chunk, a free chunk or a bin node are the regions of
 `Region.lean` (`BlockHeapAt.chunkK`, `.freeSpan`, `.nodeK`).
@@ -72,11 +71,6 @@ theorem Realises.of_log {H : List (Nat × Nat)} {m m' : Mem} {p : Permit}
     (hr : ReadsOK m' p.reads) (hk : KeepsOK m m' p.keeps) : Realises H m m' p :=
   ⟨hr, hk, fun a ha hw => hlog a (by rintro (h | h) <;> contradiction)⟩
 
-/-- Sequential composition of two edits' windows. -/
-theorem Realises.seq_agree {H : List (Nat × Nat)} {m m1 m2 : Mem} {p q : Permit}
-    (h1 : Realises H m m1 p) (h2 : Realises H m1 m2 q) :
-    ∀ a, vsaFoot H a → ¬ (p.win a ∨ q.win a) → m2[a]? = m[a]? :=
-  fun a ha hw => (h2.agree a ha fun h => hw (.inr h)).trans (h1.agree a ha fun h => hw (.inl h))
 
 /-- Discharge the reads and kept words of a permit over a concrete store log; also closes a
 single `read64 (writeLog …) a = some v` goal of an edit that has no permit. -/
