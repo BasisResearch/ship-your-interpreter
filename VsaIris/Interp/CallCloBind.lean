@@ -252,8 +252,8 @@ theorem cloParamStep (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
   have hO : ldv .ld M2 (s.toNat - 1088) = BitVec.ofNat 64 (8 * j) := by
     rw [ldv_agree (M' := Mt1) fun i hi => hM2 _ (by simp only [InExt]; omega)
       (by simp only [InExt]; omega), hMt1', hmiss _ _ _ _ _ (by omega), ldv_store_hit]
-  have h1024 : ldv .ld M2 (s + 18446744073709550528#64 + 1024#64).toNat = rv 22 := by
-    rw [hoff 1024 (by decide), ldv_agree (M' := Mt) fun i hi => hag _ (by simp only [InExt]; omega)
+  have h1024 : ldv .ld M2 (s.toNat - 1088 + 1024) = rv 22 := by
+    rw [ldv_agree (M' := Mt) fun i hi => hag _ (by simp only [InExt]; omega)
       (by simp only [InExt]; omega) (by omega)]
     exact hcl.s6m
   have hsp' : CloSpills M2 s ret rv := hcl.spills.agree fun k h1 h2 _ _ =>

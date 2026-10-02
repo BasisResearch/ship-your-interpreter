@@ -135,11 +135,8 @@ end Defs
   · icombine Hspec Hcode Hro Hav Hst Hw Hslot Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CallN_run1 (w0 := w0) (w1 := w1) (w2 := w2) hlive hfg ⟨hx1, hx2, hx3⟩ hcall.s0
-    hcall.sp ?_ ?_ ?_ ?_ ?_
-  · rw [hoff 96 (by decide)]; exact hcall.w0
-  · rw [hoff 104 (by decide)]; exact hcall.w1
-  · rw [hoff 112 (by decide)]; exact hcall.w2
-  · rw [hoff 96 (by decide)]; exact ldv_lw_of_ld hcall.w0 hk5 (by decide)
+    hcall.sp hcall.w0 hcall.w1 hcall.w2
+    (ldv_lw_of_ld hcall.w0 hk5 (by decide)) ?_
   intro vl _
   apply swp_closeRM
   intro R1 Mt1 hR1 hMt1
@@ -222,11 +219,11 @@ end Defs
     ix_reg; rw [hkR 2 (by decide) (by decide)]; subst hR1; ix_reg; exact hcall.sp
   refine CallN_run2 (ret := ret) (v8 := rv 8) (v9 := rv 9) (v18 := rv 18) (v23 := rv 23) hlive hfg
     hal h2' ?_ ?_ ?_ ?_ ?_ ?_
-  · rw [hoff 1080 (by decide), hfr 1080 (by omega)]; exact hcall.ra
-  · rw [hoff 1072 (by decide), hfr 1072 (by omega)]; exact hcall.sv8
-  · rw [hoff 1064 (by decide), hfr 1064 (by omega)]; exact hcall.sv9
-  · rw [hoff 1056 (by decide), hfr 1056 (by omega)]; exact hcall.sv18
-  · rw [hoff 1016 (by decide), hfr 1016 (by omega)]; exact hcall.sv23
+  · rw [hfr 1080 (by omega)]; exact hcall.ra
+  · rw [hfr 1072 (by omega)]; exact hcall.sv8
+  · rw [hfr 1064 (by omega)]; exact hcall.sv9
+  · rw [hfr 1056 (by omega)]; exact hcall.sv18
+  · rw [hfr 1016 (by omega)]; exact hcall.sv23
   apply swp_closeF
   unfold F'
   iintro ⟨⟨Hst, Hnull, Hw, Hk⟩, Hms⟩

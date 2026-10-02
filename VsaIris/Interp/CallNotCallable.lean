@@ -12,13 +12,12 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s w0 w1 w2 : BitVec 64} {k : Nat} (hfg : EvalFrameG s) (hx : RamWin aX.toNat 28)
     (h8 : R 8 = aX) (h2 : R 2 = s + 18446744073709550528#64)
-    (hW0 : ldv .ld Mt (s + 18446744073709550528#64 + 96#64).toNat = w0)
-    (hW1 : ldv .ld Mt (s + 18446744073709550528#64 + 104#64).toNat = w1)
-    (hW2 : ldv .ld Mt (s + 18446744073709550528#64 + 112#64).toNat = w2)
-    (hK : ldv .lw Mt (s + 18446744073709550528#64 + 96#64).toNat = BitVec.ofNat 64 k)
+    (hW0 : ldv .ld Mt (s.toNat - 1088 + 96) = w0) (hW1 : ldv .ld Mt (s.toNat - 1088 + 104) = w1)
+    (hW2 : ldv .ld Mt (s.toNat - 1088 + 112) = w2)
+    (hK : ldv .lw Mt (s.toNat - 1088 + 96) = BitVec.ofNat 64 k)
     (hk5 : BitVec.ofNat 64 k ≠ 5#64) (hk4 : BitVec.ofNat 64 k ≠ 4#64) :
     IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003254#64 R Mt
-  by with_geom sym_run hlive using [h8, h2, hW0, hW1, hW2, hK, hk5, hk4, hfg.sf] at 0x80003dcc
+  by with_frame with_geom sym_run hlive using [h8, h2, hW0, hW1, hW2, hK, hk5, hk4, hfg.sf] at 0x80003dcc
 
 #ix_seg CallX_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -74,11 +73,8 @@ theorem callNotCallable (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (G
   · icombine Hcode HE Hst Hw Hab as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CallX_run1 (k := valTag fv) (w0 := w0) (w1 := w1) (w2 := w2) hlive hfg
-    ⟨hnd.lo, hnd.hi, hnd.off⟩ hcall.s0 hcall.sp ?_ ?_ ?_ ?_ hk5 hk4 ?_
-  · rw [hoff 96 (by decide)]; exact hcall.w0
-  · rw [hoff 104 (by decide)]; exact hcall.w1
-  · rw [hoff 112 (by decide)]; exact hcall.w2
-  · rw [hoff 96 (by decide)]; exact ldv_lw_of_ld hcall.w0 htag (by omega)
+    ⟨hnd.lo, hnd.hi, hnd.off⟩ hcall.s0 hcall.sp hcall.w0 hcall.w1 hcall.w2
+    (ldv_lw_of_ld hcall.w0 htag (by omega)) hk5 hk4 ?_
   intro vl _ _
   apply swp_closeRM
   intro R1 Mt1 hR1 hMt1

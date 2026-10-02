@@ -262,18 +262,15 @@ theorem fnNode_of {m : Mem} {P : Nat → Prop} {q : BitVec 64} {name : Option St
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s w0 w1 w2 : BitVec 64} (hfg : EvalFrameG s) (hx : RamWin aX.toNat 28)
     (h8 : R 8 = aX) (h2 : R 2 = s + 18446744073709550528#64)
-    (hW0 : ldv .ld Mt (s + 18446744073709550528#64 + 96#64).toNat = w0)
-    (hW1 : ldv .ld Mt (s + 18446744073709550528#64 + 104#64).toNat = w1)
-    (hW2 : ldv .ld Mt (s + 18446744073709550528#64 + 112#64).toNat = w2)
-    (hK : ldv .lw Mt (s + 18446744073709550528#64 + 96#64).toNat = 4#64) :
+    (hW0 : ldv .ld Mt (s.toNat - 1088 + 96) = w0) (hW1 : ldv .ld Mt (s.toNat - 1088 + 104) = w1)
+    (hW2 : ldv .ld Mt (s.toNat - 1088 + 112) = w2) (hK : ldv .lw Mt (s.toNat - 1088 + 96) = 4#64) :
     IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003254#64 R Mt
-  by with_geom sym_run hlive using [h8, h2, hW0, hW1, hW2, hK, hfg.sf] at 0x80003288
+  by with_frame with_geom sym_run hlive using [h8, h2, hW0, hW1, hW2, hK, hfg.sf] at 0x80003288
 
 #ix_seg CallK_runB {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {Dt Mt : Mem} {R : Nat → BitVec 64}
     {s cp q : BitVec 64} (hfg : EvalFrameG s) (hc : RamWin cp.toNat 16)
-    (h13 : R 13 = cp) (h2 : R 2 = s + 18446744073709550528#64)
-    (hq : ldv .ld Dt cp.toNat = q) :
+    (h13 : R 13 = cp) (h2 : R 2 = s + 18446744073709550528#64) (hq : ldv .ld Dt cp.toNat = q) :
     IW live Dt (accAddrs cp.toNat 16) (InExt (s.toNat - 1088, 1088)) Q 0x80003288#64 R Mt
   by with_geom sym_run hlive using [h13, h2, hq, hfg.sf] at 0x80003294
 

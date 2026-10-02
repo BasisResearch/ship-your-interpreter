@@ -36,11 +36,8 @@ open VsaIris.Inst Vsa.RuntimeRepr
   · icombine Hcode Himg Hro Hdep Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CallK_runA (w0 := w0) (w1 := w1) (w2 := w2) hlive hfg ⟨hnd.lo, hnd.hi, hnd.off⟩
-    hcall.s0 hcall.sp ?_ ?_ ?_ ?_ ?_
-  · rw [hoff 96 (by decide)]; exact hcall.w0
-  · rw [hoff 104 (by decide)]; exact hcall.w1
-  · rw [hoff 112 (by decide)]; exact hcall.w2
-  · rw [hoff 96 (by decide)]; exact ldv_lw_of_ld hcall.w0 hk4 (by decide)
+    hcall.s0 hcall.sp hcall.w0 hcall.w1 hcall.w2
+    (ldv_lw_of_ld hcall.w0 hk4 (by decide)) ?_
   intro vl _ _
   apply swp_closeRM
   intro R1 Mt1 hR1 hMt1

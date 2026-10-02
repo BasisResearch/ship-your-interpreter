@@ -206,24 +206,20 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {aX s w0 w1 w2 : BitVec 64} (hfg : EvalFrameG s) (hx : RamWin aX.toNat 28)
     (h8 : R 8 = aX) (h2 : R 2 = s + 18446744073709550528#64)
-    (hW0 : ldv .ld Mt (s + 18446744073709550528#64 + 96#64).toNat = w0)
-    (hW1 : ldv .ld Mt (s + 18446744073709550528#64 + 104#64).toNat = w1)
-    (hW2 : ldv .ld Mt (s + 18446744073709550528#64 + 112#64).toNat = w2)
-    (hK : ldv .lw Mt (s + 18446744073709550528#64 + 96#64).toNat = 5#64) :
+    (hW0 : ldv .ld Mt (s.toNat - 1088 + 96) = w0) (hW1 : ldv .ld Mt (s.toNat - 1088 + 104) = w1)
+    (hW2 : ldv .ld Mt (s.toNat - 1088 + 112) = w2) (hK : ldv .lw Mt (s.toNat - 1088 + 96) = 5#64) :
     IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003254#64 R Mt
-  by with_geom sym_run hlive using [h8, h2, hW0, hW1, hW2, hK, hfg.sf] at 0x800039f4
+  by with_frame with_geom sym_run hlive using [h8, h2, hW0, hW1, hW2, hK, hfg.sf] at 0x800039f4
 
 #ix_seg CallN_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s ret v8 v9 v18 v23 : BitVec 64} {DA : List Nat} (hfg : EvalFrameG s)
     (hal : ret.toNat % 4 = 0)
     (h2 : R 2 = s + 18446744073709550528#64)
-    (hRA : ldv .ld Mt (s + 18446744073709550528#64 + 1080#64).toNat = ret)
-    (hS0 : ldv .ld Mt (s + 18446744073709550528#64 + 1072#64).toNat = v8)
-    (hS1 : ldv .ld Mt (s + 18446744073709550528#64 + 1064#64).toNat = v9)
-    (hS2 : ldv .ld Mt (s + 18446744073709550528#64 + 1056#64).toNat = v18)
-    (hS7 : ldv .ld Mt (s + 18446744073709550528#64 + 1016#64).toNat = v23) :
+    (hRA : ldv .ld Mt (s.toNat - 1088 + 1080) = ret) (hS0 : ldv .ld Mt (s.toNat - 1088 + 1072) = v8)
+    (hS1 : ldv .ld Mt (s.toNat - 1088 + 1064) = v9) (hS2 : ldv .ld Mt (s.toNat - 1088 + 1056) = v18)
+    (hS7 : ldv .ld Mt (s.toNat - 1088 + 1016) = v23) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x800039f8#64 R Mt
-  by with_geom sym_run hlive using [h2, hRA, hS0, hS1, hS2, hS7, hfg.sf, hal]
+  by with_frame with_geom sym_run hlive using [h2, hRA, hS0, hS1, hS2, hS7, hfg.sf, hal]
 
 end VsaIris.Interp

@@ -73,11 +73,8 @@ theorem callNativeMarshal (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP 
   · icombine Hav Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CallN_run1 (w0 := w0) (w1 := w1) (w2 := w2) hlive hfg ⟨hnd.lo, hnd.hi, hnd.off⟩
-    hcall.s0 hcall.sp ?_ ?_ ?_ ?_ ?_
-  · rw [hoff 96 (by decide)]; exact hcall.w0
-  · rw [hoff 104 (by decide)]; exact hcall.w1
-  · rw [hoff 112 (by decide)]; exact hcall.w2
-  · rw [hoff 96 (by decide)]; exact ldv_lw_of_ld hcall.w0 hk5 (by decide)
+    hcall.s0 hcall.sp hcall.w0 hcall.w1 hcall.w2
+    (ldv_lw_of_ld hcall.w0 hk5 (by decide)) ?_
   intro vl _
   apply swp_closeRM
   intro R1 Mt1 hR1 hMt1
@@ -123,7 +120,6 @@ theorem callNativeEpi (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF 
         stackScratch s n -∗ PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
   have hfg := hsg.evalFrame (by omega); geom_open
-  have hoff := evalSP_off' hfg
   have hreg : ∀ a, InExt (argsBase s, 24 * vs.length) a → InExt (s.toNat - 1088, 1088) a := by
     intro a ha; simp only [InExt, argsBase] at ha ⊢; omega
   iintro ⟨#Hcode, Hms, Hvals, Hst, Hk⟩
@@ -151,11 +147,11 @@ theorem callNativeEpi (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF 
   intro F'
   refine CallN_run2 (m := ∅) (DA := []) (ret := ret) (v8 := rv 8) (v9 := rv 9) (v18 := rv 18)
     (v23 := rv 23) hlive hfg hal h2' ?_ ?_ ?_ ?_ ?_ ?_
-  · rw [hoff 1080 (by decide), hfr 1080 (by omega) (by omega)]; exact hcall.ra
-  · rw [hoff 1072 (by decide), hfr 1072 (by omega) (by omega)]; exact hcall.sv8
-  · rw [hoff 1064 (by decide), hfr 1064 (by omega) (by omega)]; exact hcall.sv9
-  · rw [hoff 1056 (by decide), hfr 1056 (by omega) (by omega)]; exact hcall.sv18
-  · rw [hoff 1016 (by decide), hfr 1016 (by omega) (by omega)]; exact hcall.sv23
+  · rw [hfr 1080 (by omega) (by omega)]; exact hcall.ra
+  · rw [hfr 1072 (by omega) (by omega)]; exact hcall.sv8
+  · rw [hfr 1064 (by omega) (by omega)]; exact hcall.sv9
+  · rw [hfr 1056 (by omega) (by omega)]; exact hcall.sv18
+  · rw [hfr 1016 (by omega) (by omega)]; exact hcall.sv23
   apply swp_closeF
   unfold F'
   iintro ⟨⟨Hst, Hk⟩, Hms⟩

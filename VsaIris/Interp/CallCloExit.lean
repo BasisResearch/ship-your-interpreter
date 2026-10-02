@@ -110,7 +110,6 @@ theorem cloExitN (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   iframe Hvn Hcode Hms Hsr %h10 %hslg
   iintro %R5 %hk5 Hval Hms
 
-  have hoff := evalSP_off' hfg
   have hfr : ∀ k, closureS s k → imgM Mt4 k = imgM Mt k := fun k hk => by
     simp only [closureS, InExt] at hk
     rw [hMt4, imgM_store_miss _ _ (by rw [hi8]; omega), hM3f k (by simp only [InExt]; omega),
@@ -126,14 +125,8 @@ theorem cloExitN (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   · rw [hro]; icombine Hst Hval Hw Hk as HF; isplitl []; iexact Hcode; iframe HF Hms
   intro F'
   refine CloX_runE (m := ∅) (ret := ret) (v8 := rv 8) (v9 := rv 9) (v18 := rv 18) (v19 := rv 19)
-    (v21 := rv 21) (v23 := rv 23) hlive hfg hal h2' ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
-  · rw [hoff 1080 (by decide)]; exact hsv.saved.ra
-  · rw [hoff 1072 (by decide)]; exact hsv.saved.s0
-  · rw [hoff 1064 (by decide)]; exact hsv.saved.s1
-  · rw [hoff 1056 (by decide)]; exact hsv.saved.s2
-  · rw [hoff 1048 (by decide)]; exact hsv.s3
-  · rw [hoff 1032 (by decide)]; exact hsv.s5
-  · rw [hoff 1016 (by decide)]; exact hsv.s7
+    (v21 := rv 21) (v23 := rv 23) hlive hfg hal h2' hsv.saved.ra hsv.saved.s0 hsv.saved.s1
+    hsv.saved.s2 hsv.s3 hsv.s5 hsv.s7 ?_
   apply swp_closeF
   unfold F'
   iintro ⟨⟨Hst, Hval, Hw, Hk⟩, Hms⟩
@@ -252,15 +245,8 @@ theorem cloExitR (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   · rw [hro]; icombine Hw3 Hst Hw Hk as HF; isplitl []; iexact Hcode; iframe HF Hms
   intro F'
   refine CloX_runC (m := ∅) (ret := ret) (v8 := rv 8) (v9 := rv 9) (v18 := rv 18) (v19 := rv 19)
-    (v21 := rv 21) (v23 := rv 23) hlive hfg hslg hr4
-    hal h9' h2' ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
-  · rw [hoff 1080 (by decide)]; exact hsv.saved.ra
-  · rw [hoff 1072 (by decide)]; exact hsv.saved.s0
-  · rw [hoff 1064 (by decide)]; exact hsv.saved.s1
-  · rw [hoff 1056 (by decide)]; exact hsv.saved.s2
-  · rw [hoff 1048 (by decide)]; exact hsv.s3
-  · rw [hoff 1032 (by decide)]; exact hsv.s5
-  · rw [hoff 1016 (by decide)]; exact hsv.s7
+    (v21 := rv 21) (v23 := rv 23) hlive hfg hslg hr4 hal h9' h2'
+    hsv.saved.ra hsv.saved.s0 hsv.saved.s1 hsv.saved.s2 hsv.s3 hsv.s5 hsv.s7 ?_
   apply swp_closeF
   unfold F'
   iintro ⟨⟨#Hw3, Hst, Hw, Hk⟩, Hms⟩
