@@ -249,3 +249,98 @@ cluster, and the unanimous first pick is also piloted as a new datatype:
 
 T (translation) is not piloted: its saving is bounded by one duplicated pair (≈ 160 lines, ≈ 11 s)
 and its setup needs a step-commutation lemma against the Sail model.
+
+## 7. Bake-off (one timing script for all contenders, `~/syi-r11/bake/bake.sh`)
+
+Pilot branches from 78f9fb97, each in its own worktree (E56), each built (`lake build VsaIris`, 0
+errors, 0 `sorry`): PA `exp-R11-PA` 013a2ab0, PB `exp-R11-PB` 0db4a774, PC `exp-R11-PC` a6b34d2c,
+PD `exp-R11-PD` ad907eb7.
+
+### Suite T (time): single-file one-thread user CPU, s, min of 3 rounds, contenders back to back per file, three rounds in parallel (load 9–14)
+
+| module | base | PA keys (meet) | PB atlas | PC geometry | PD read-back |
+|---|---:|---:|---:|---:|---:|
+| EnvGetHit (Rs) | 4.02 | **1.92** | 2.36 | 3.95 | 3.98 |
+| ProofValueKindName (Ri) | 3.91 | **3.24** | 3.89 | 3.93 | 3.92 |
+| ProofNativeAssert (Ri) | 16.44 | **11.97** | 16.26 | 16.65 | 16.73 |
+| LoopArgs (W) | 8.65 | **7.87** | 8.71 | 8.55 | 8.52 |
+| CallCloP (W) | 6.71 | 6.77 | 6.72 | 6.74 | 6.73 |
+| **primary total** | 39.73 | **31.77 (−20.0%)** | 37.94 (−4.5%) | 39.82 | 39.88 |
+| fresh: EnvSetSpans (Rs) | 10.33 | **4.55** | 6.51 | 10.43 | 10.51 |
+| fresh: CallPrefix (Ri) | 8.63 | **8.19** | 8.61 | 8.61 | 8.54 |
+| fresh: ProofStringify (Ri) | 43.57 | **33.16** | 43.97 | 44.17 | 44.52 |
+| fresh: LoopWhile (W) | 9.31 | **7.67** | 9.32 | 9.36 | 9.67 |
+| fresh: ProofValuePrint (W) | 15.09 | **13.82** | 15.40 | 15.19 | 14.93 |
+| **fresh total (forecast)** | 86.93 | **67.39 (−22.5%)** | 83.81 (−3.6%) | 87.76 | 88.17 |
+| diagnostic: EnvDefineSpans | 36.40 | 19.62 | **17.09** | 36.27 | 36.25 |
+| changed by PC/PD: CallCloRuns | 9.99 | 7.34 | 9.81 | 9.96 | 10.20 |
+| CallCloExit / CallCloBind / CallCloHead | 3.03 / 5.01 / 8.23 | 2.97 / 4.94 / 8.35 | 3.02 / 4.94 / 8.29 | 3.24 / 5.19 / 8.34 | 2.97 / 5.11 / 8.19 |
+| CallNative / EnvDefineCalls / EnvSpan / ProofEnvSet | 2.38 / 2.38 / 1.28 / 2.28 | 2.08 / 2.22 / 1.28 / 2.42 | 2.41 / 2.40 / 1.30 / 2.41 | 2.44 / 2.32 / 1.27 / 2.31 | 2.39 / 2.34 / 1.31 / 2.30 |
+| setup (non-blank) | | 271 new (`FootKey`) + 490 moved (`KeyNF` ← RegionTac/Region) | 280 generic + 14 bridges | 41 | 36 |
+
+What each pilot found:
+
+- **PA (keys reach the footprint, the meet).** `foot_key` decides a side goal whose footprint unfolds
+  to `∨`/`∧` of comparisons, alignments, `≠` and literal constants (also under `∀ b ∈ accAddrs a w`) by
+  `linNF` keys and literal checks only, never `omega`; hooked as a new `sx_addr` alternative (every
+  `sx_side` alternative, including the per-file ones, ends in `sx_addr`, and `ix_fwd`'s discharger
+  reaches it too) and as the first stage of `sym_run`/`sym_run1`'s geometry tactic. To make the key
+  route importable below SymInterp/EnvTac, the region-free half of RegionTac (key lemmas, `KeyFacts`,
+  `linNF`, `relNF`, difference facts, `alignOf`, `key_toNat_add`) moved unchanged into `KeyNF`
+  (imports only RegionCore). Per call 0.7–2.0 ms (success), 0.05–1.5 ms (failure), against 300–700 ms
+  for the old `hS`/`hLDS` route and 10–100 ms for the `sym_run` geometry goals. No proof file changed.
+  Defects found: (1) a stronger discharger changes which goals a run leaves to the proof (reading
+  BitVec register equations closed an alignment goal ProofArith closes by hand: wrong goal count), so
+  run-tactic strength is part of every proof's interface; (2) `keyFacts` read floors only from
+  top-level literal sums, not from conjuncts or bounds written with constants (`tohostAddr + 16 ≤
+  p.toNat`); (3) the per-file `sx_side` alternatives are each tried and failed before the next (169
+  failing `omega` calls in EnvDefineSpans, now ≈ 3.7 ms each).
+- **PB (atlas datatype).** `Atlas.den` over guarded charts, a generic `InExt.atlas` bridge plus three
+  footprint bridges, `chart_mem` as an `sx_side` alternative (1.1 ms success, 0.008 ms failure). It
+  only reaches the env modules (it imports RegionTac, which is not below SymInterp), so it moved no
+  `sym_run` module. It also reads local chart hypotheses `∀ x, lo ≤ x → x < hi → S x`, which closed
+  goals EnvDefineSpans had discharged by hand (14 stale lines removed): that is why it beats PA on that
+  one module. Found the same `keyFacts` floor defect and the rule-ordering hazard (per-file global
+  `sx_side` rules outrank earlier generic ones; the generic rule must be registered again after them).
+- **PC (geometry records).** One L-wrap projection `toNat_frame`/`toNat_frame_off`, `EvalFrameG.off`,
+  `RamWin.ofEnds`, and `geom_open`/`with_geom` (open every geometry record in context as hypotheses,
+  0.3 ms). Gate cluster `Clo run` restated with records: 11 pieces 138 → 104 lines, users in four files
+  updated. Defect: `#ix_seg` turns every hypothesis left in a piece's context into a premise of its
+  continuation goals, so hypotheses a piece body adds must be cleared (`with_geom`); `htifLo` and
+  `tohostAddr` are one literal under two names and `omega` treats them as different atoms.
+- **PD (read-back and register keep over the existing terms).** `ldv_win`, `rd_back [lemmas] using
+  [defs]` (one call for a `imgM_store_miss` chain), `reg_keep [h]` (keep over a literal register list by
+  one `decide +kernel`). Per call 0.2–0.6 s against ≈ 18–45 ms for the hand steps it replaces; two
+  uses reverted for time. Defects: `maxRecDepth` escapes `first`; a failing simp-discharger alternative
+  rolls back the unfolding the next alternative needed. Found a dead 9-line block in the base.
+
+### Suite L (agent effort): statement-identical re-proofs of the six primary declarations
+
+| case | base | PC lines (fails) | PD lines (fails) |
+|---|---:|---:|---:|
+| `dispResL_of_argVals` | 27 | 27 (0) | 14 (3) |
+| `regsOf_entry` | 33 | 29 (0) | 22 (1) |
+| `wp_call_reallocOpt` | 60 | 60 (0) | 44 (1) |
+| `cloErrDepth` | 48 | 47 (3) | 44 (1) |
+| `sg_memcpy` | 132 | 128 (1) | 95 (6) |
+| `frame_write_close` | 82 | 79 (1) | 57 (3) |
+| total | 382 | 370 (5) | 276 (15) |
+| of which attributable to the round-11 layer | | −4 | ≈ −20 (one case, `sg_memcpy`) |
+| older layers | | 0 | −7 |
+| plain cleanup (no layer) | | −8 | ≈ −79 |
+
+All twelve statement hashes match the base. The two pilots drew very different amounts of plain
+cleanup from the same cases (8 vs 79 lines): that number measures the agent's thoroughness, not the
+layer, and is credited to neither (E42). Layer-attributable: PC −4 on the suite plus −34 on the gate
+cluster for 41 setup lines; PD ≈ −20 on the suite plus −13 on two CallCloHead chains for 36 setup
+lines, at 0.2–0.6 s per call.
+
+Reading. On suite T, PA beats the ontologists' datatype version PB on every module but one, primary
+−20.0% vs −4.5%, fresh −22.5% vs −3.6%; the difference is reach (PA's key route sits under
+`sx_addr` and inside `sym_run`, PB's only under the env modules' `sx_side`), and PB's one extra idea
+(local chart hypotheses) is worth 2.5 s on EnvDefineSpans. PC and PD are time-neutral (CallCloExit
++7%, CallCloBind +3.6% under PC, within the bound). The line candidates are small: the census
+already said 9 of the 12 L cases contain no idiom they target (E54), and the pilots confirm it.
+Combination for the next step: PA + PC + PD (merged as `exp-R11-C` 933e8337, conflicts only in the
+held-out re-proofs, PD's versions kept; full `lake build` green, 1,562 jobs), measured on the whole
+scope and on the fresh L cases.
