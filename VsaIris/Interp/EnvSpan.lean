@@ -81,25 +81,18 @@ theorem regsOf_entry (rs : List Nat) (fixed : List (Nat × BitVec 64)) (clob : L
   ihave Hf := savedOwn_fn fixed hfx $$ Hf
   ihave ⟨%f, Hc⟩ := clobbered_fn clob hcl $$ Hc
   classical
-  obtain ⟨R, hR⟩ : ∃ R : Nat → BitVec 64,
-      R = fun k => if k ∈ fixed.map Prod.fst then pairVal fixed k else f k := ⟨_, rfl⟩
-  have e1 : sepL (GF := GF) (fixed.map Prod.fst) (fun r => r ↦ᵣ R r) =
-      sepL (fixed.map Prod.fst) (fun k => k ↦ᵣ pairVal fixed k) :=
-    sepL_congr fun k hk => by rw [hR]; simp only [hk, ite_true]
-  have e2 : sepL (GF := GF) clob (fun r => r ↦ᵣ R r) = sepL clob (fun k => k ↦ᵣ f k) :=
-    sepL_congr fun k hk => by
-      have : k ∉ fixed.map Prod.fst := fun h => hdj k h k hk rfl
-      rw [hR]; simp only [this, ite_false]
+  let R : Nat → BitVec 64 := fun k => if k ∈ fixed.map Prod.fst then pairVal fixed k else f k
   iexists R
   isplitr
   · ipureintro
-    intro p hp
-    simp only [hR, List.mem_map_of_mem hp, ite_true]
-    exact pairVal_of_mem fixed hfx p hp
+    exact fun p hp => by simp only [R, List.mem_map_of_mem hp, ite_true, pairVal_of_mem fixed hfx p hp]
   unfold regsOf
   iapply (sepL_perm _ hperm).1
   iapply (sepL_append _ _ _).2
-  rw [e1, e2]
+  rw [sepL_congr (Φ := fun r => r ↦ᵣ R r) (Ψ := fun k => k ↦ᵣ pairVal fixed k) fun k hk => by
+      simp only [R, hk, ite_true],
+    sepL_congr (Φ := fun r => r ↦ᵣ R r) (Ψ := fun k => k ↦ᵣ f k) fun k hk => by
+      simp only [R, show k ∉ fixed.map Prod.fst from fun h => hdj k h k hk rfl, ite_false]]
   iframe Hf Hc
 
 theorem regsOf_exit (rs : List Nat) (fixed : List (Nat × BitVec 64)) (clob : List Nat)

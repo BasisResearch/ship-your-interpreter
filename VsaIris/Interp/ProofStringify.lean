@@ -6,6 +6,7 @@ import VsaIris.Vsa.OomSites
 import VsaIris.Vsa.SnpHoles
 import VsaIris.Vsa.ErrnoOwn
 import VsaIris.Interp.SymInterp
+import VsaIris.Interp.RegRead
 
 namespace VsaIris.Interp
 
@@ -168,11 +169,13 @@ macro_rules
     {s p : BitVec 64}
     (h2 : R 2 = s + 18446744073709551504#64)
     (hs1 : 0x87800000 + 112 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
-    (hp : SlotGeom p) (h10 : R 10 ≠ 0#64) :
+    (hp1 : p.toNat % 8 = 0) (hp2 : 0x8001ad00 + 16 ≤ p.toNat) (hp3 : p.toNat + 24 ≤ 0x100000000)
+    (h10 : R 10 ≠ 0#64) :
     IW live ∅ [] (sgF s p) Q 0x8000305c#64 R M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
-    with_geom sym_run1 hlive using [h2, hsf] at 0x8000306c
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
+      rw [BitVec.toNat_add]; simp; omega
+    sym_run1 hlive using [h2, hsf] at 0x8000306c
 
 #ix_seg sg_epi {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
@@ -809,22 +812,17 @@ theorem sg_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have hq0 : q ≠ 0#64 := fun h => f.hfresh.1.nonzero (by rw [h]; rfl)
   refine sg_run Wp ?_
   intro F'
-  refine sg_copy cx.hlive f.h2 (by omega) hs2 hs3 cx.hg (by rw [f.h10]; exact hq0) ?_
+  refine sg_copy cx.hlive f.h2 (by omega) hs2 hs3 cx.hg.al
+    (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi (by rw [f.h10]; exact hq0) ?_
   intros; apply swp_closeF
   dsimp only [F']
-  have hoff : ∀ k, k < 112 → (s + 18446744073709551504#64 + BitVec.ofNat 64 k).toNat =
-      s.toNat - 112 + k := fun _ _ => toNat_frame_off (c := 112) rfl (by omega) (by omega)
+  have eB : (s + 18446744073709551504#64 + 16#64).toNat = s.toNat - 96 := by
+    rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
   have hsub : ∀ k, InExt (s.toNat - 96, x.toList.length + 1) k → sgF s p k := fun k hk =>
     .inl (by simp only [InExt] at hk ⊢; omega)
   have hsl : ∀ k, sgF s p k ↔ ((sgF s p k ∧ ¬ InExt (s.toNat - 96, x.toList.length + 1) k) ∨
-      InExt (s.toNat - 96, x.toList.length + 1) k) := fun k => by
-    constructor
-    · intro h; by_cases h' : InExt (s.toNat - 96, x.toList.length + 1) k
-      · exact .inr h'
-      · exact .inl ⟨h, h'⟩
-    · rintro (⟨h, _⟩ | h)
-      · exact h
-      · exact hsub k h
+      InExt (s.toNat - 96, x.toList.length + 1) k) := fun k =>
+    ⟨fun h => (Classical.em _).elim .inr (.inl ⟨h, ·⟩), (·.elim (·.1) (hsub k))⟩
   have hfr := f.hfresh.1
   have hq1 := hfr.lo; have hq2 := hfr.hi
   simp only [vsaLayoutP, Vsa.Sim.DlHeap.heapStart, Vsa.Sim.DlHeap.heapEnd] at hq1 hq2
@@ -837,7 +835,7 @@ theorem sg_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   unfold memcpySpecOwned
   ihave #Hmcs := Hmc0 $$ %q %(s + 18446744073709551504#64 + 16#64) %(x.toList.length + 1) %(imgM M)
   unfold memcpyPC
-  rw [hoff 16 (by omega), show s.toNat - 112 + 16 = s.toNat - 96 by omega]
+  rw [eB]
   iapply (ms_callRegs Wp (i := 0x8000306c)
     ((step% jalx 0x8000306c) live (fun q hq => cx.hlive _ ((interp_code (by decide)) q hq))) (interp_code (by decide))
     (L := [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31])
@@ -861,19 +859,13 @@ theorem sg_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     (S := fun a => sgF s p a ∧ ¬ InExt (s.toNat - 96, x.toList.length + 1) a) (Mt := M)
     ?hP ?hQ)
   case hP =>
-    simp only [sepL_cons, sepL_nil]
+    simp only [sepL_cons, sepL_nil, ix_reg_set, f.h10, f.h9, f.sn]
     iintro ⟨⟨H10, H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩, Hbk, HB, #Hbi⟩
-    iframe Hbk HB Hbi
+    iframe Hbk HB Hbi H10 H11 H12
     isplitl []
     · ipureintro
       refine ⟨by decide, ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩,
         by unfold htifLo; omega, ⟨by omega, by omega, .inr (by unfold htifLo; omega)⟩⟩
-    isplitl [H10]
-    · ix_reg; rw [f.h10]; iexact H10
-    isplitl [H11]
-    · ix_reg; rw [f.h9]; iexact H11
-    isplitl [H12]
-    · ix_reg; rw [f.sn]; iexact H12
     iapply clobbered_of_fn argClob _
     unfold argClob
     simp only [sepL_cons, sepL_nil]
@@ -885,44 +877,22 @@ theorem sg_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     unfold retClob argClob
     simp only [sepL_cons, sepL_nil]
     icases Hcl with ⟨H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩
-    simp only [ite_true]
-    simp (config := { decide := true }) only [ite_false]
+    simp (config := { decide := true }) only [ite_true, ite_false]
     iframe H10 H11 H12 H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31 Hd HB
   iframe Hmcs Hcode Hms Hblk HB Himg
   iintro %g ⟨%hg10, Hd, HB⟩ Hms
   ihave ⟨%M2, Hms, %⟨hM2a, hM2b, -⟩⟩ := ms_join $$ [$]
   ihave Hms := ms_iff (fun k => (hsl k).symm) $$ Hms
-  have hM2 : ∀ k, sgF s p k → imgM M2 k = imgM M k := fun k hk => by
-    by_cases h : InExt (s.toNat - 96, x.toList.length + 1) k
-    · exact hM2b k h
-    · exact hM2a k ⟨hk, h⟩
-  have hld : ∀ o, 16 ≤ o → o + 8 ≤ 112 →
-      ldv .ld M2 (s + 18446744073709551504#64 + BitVec.ofNat 64 o).toNat =
-      ldv .ld M (s + 18446744073709551504#64 + BitVec.ofNat 64 o).toNat := fun o h1 h2 => by
-    rw [hoff o (by omega)]
-    exact ldv_agree fun j hj => hM2 _ (.inl (by simp only [InExt]; omega))
+  have hM2 : ∀ k, sgF s p k → imgM M2 k = imgM M k := fun k hk =>
+    (Classical.em _).elim (hM2b k) (hM2a k ⟨hk, ·⟩)
   iapply (hB _ M2 _ ?t4)
   rotate_left
   · unfold SgRestC
     iframe Hcode Hv Hh Hd Hstd Hcon Hst Hk Hms
   case t4 =>
-    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, cstrImg_shift f.hbuf, f.hfresh⟩
-    · ix_reg; exact f.h10
-    · ix_reg; exact f.h2
-    · intro y hy hc hy2 hy8 hy9
-      have hy1 : y ≠ 1 := fun e => by subst e; revert hy; decide
-      have hK : y ∉ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31] :=
-        fun h => hc ((show ∀ z ∈ [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31],
-          z ∈ callerSaved by decide) y h)
-      have hy11 : y ≠ 11 := fun e => hK (by simp [e])
-      have hy12 : y ≠ 12 := fun e => hK (by simp [e])
-      simp only [upd, hy1, hy8, hy11, hy12, hK, ite_false]
-      exact f.hk y hy hc hy2 hy9
-    · rw [hld 104 (by omega) (by omega)]; exact f.sra
-    · rw [hld 96 (by omega) (by omega)]; exact f.ss0
-    · rw [hld 88 (by omega) (by omega)]; exact f.ss1
-    · intro k hk
-      rw [hM2 k (.inr hk)]; exact f.hslot k hk
+    refine ⟨by ix_reg; exact f.h10, by ix_reg; exact f.h2, by reg_keep [f.hk], ?_, ?_, ?_,
+      fun k hk => (hM2 k (.inr hk)).trans (f.hslot k hk), cstrImg_shift f.hbuf, f.hfresh⟩
+    all_goals rd_back [ldv_win _ hM2, f.sra, f.ss0, f.ss1] using [sgF]
 
 theorem sg_ret {Wp : MachWP (GF := GF) (vsaModel live)} {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
@@ -1300,8 +1270,7 @@ theorem sg_strcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     unfold retClob argClob
     simp only [sepL_cons, sepL_nil]
     icases Hcl with ⟨H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩
-    simp only [ite_true]
-    simp (config := { decide := true }) only [ite_false]
+    simp (config := { decide := true }) only [ite_true, ite_false]
     iframe H10 H11 H12 H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31 Hd
   unfold blockOwn
   iframe Hscs Hcode Hms HB Hs
@@ -1631,8 +1600,7 @@ theorem sg_strHead (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     unfold retClob argClob
     simp only [sepL_cons, sepL_nil]
     icases Hcl with ⟨H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩
-    simp only [ite_true]
-    simp (config := { decide := true }) only [ite_false]
+    simp (config := { decide := true }) only [ite_true, ite_false]
     iframe H10 H11 H12 H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31
   iframe Hsls Hcode Hms Hs
   iintro %g %hg10 Hms
@@ -1761,8 +1729,7 @@ theorem sg_strCopy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String 
     unfold retClob argClob
     simp only [sepL_cons, sepL_nil]
     icases Hcl with ⟨H11, H12, H5, H6, H7, H13, H14, H15, H16, H17, H28, H29, H30, H31, -⟩
-    simp only [ite_true]
-    simp (config := { decide := true }) only [ite_false]
+    simp (config := { decide := true }) only [ite_true, ite_false]
     iframe H10 H11 H12 H5 H6 H7 H13 H14 H15 H16 H17 H28 H29 H30 H31 Hd
   iframe Hmcs Hcode Hms Hblk Hro
   iintro %g ⟨%hg10, Hd⟩ Hms
