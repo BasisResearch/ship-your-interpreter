@@ -189,20 +189,18 @@ theorem cloErrDepth (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
           ⌜imgLE img' (inp + 8) 4 = d' ∧ d' ≤ maxCallDepth⌝ -∗ world N L Room inp ρ st d') ∗
       stackScratch (s + 18446744073709550528#64) (n - 1088) ∗ (abortAt Core s n -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
-  have hsf := hfg.sf; have hs := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
-  have hinpG := hE.inpGeom
+  have hs := hfg.lo; have hinpG := hE.inpGeom
   have hinpN : (BitVec.ofNat 64 inp).toNat = inp := Nat.mod_eq_of_lt hE.inpLt
   have hi8 : (BitVec.ofNat 64 inp + 8#64).toNat = inp + 8 := by
     have := hinpG.hi; rw [hinpN] at this
     simp only [BitVec.toNat_add, BitVec.toNat_ofNat]; omega
-  have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
-    unfold codeRes; simp [dataOf]
   iintro ⟨#Hcode, #HE, Hms, Hcl, Hst, Hab⟩
   iapply wp_swpF Wp (text := interpText ++ dataOf ∅ [])
   rotate_left
-  · rw [hro]; icombine Hcode HE Hcl Hst Hab as HF; isplitl []; iexact Hcode; iframe HF Hms
+  · rw [show roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes by unfold codeRes; simp [dataOf]]
+    icombine Hcode HE Hcl Hst Hab as HF; isplitl []; iexact Hcode; iframe HF Hms
   intro F'
-  refine CloE_runD (m := ∅) hlive hsf hs hs2 hs3 hinpG.lo hinpG.hi (by rw [hinpN]; omega)
+  refine CloE_runD (m := ∅) hlive hfg.sf hfg.lo hfg.hi hfg.al hinpG.lo hinpG.hi (by rw [hinpN]; omega)
     (by rw [hinpN]; exact hinpA) hdp.s2 hdp.sp ?_
   apply swp_closeRM
   intro R4 Mt4 hR4 hMt4
@@ -212,9 +210,8 @@ theorem cloErrDepth (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
     (fun a h1 h2 => by simp only [InExt] at h1 h2; omega) $$ [Hms]
   · iapply ms_iff (T := fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (inp + 8, 4) b)
       (fun k => by rw [hinpN]) $$ Hms
-  have hdep4 : imgLE (imgM Mt4) (inp + 8) 4 = 0 := by
-    rw [hMt4, hi8, imgLE_store4_hit]; rfl
-  ihave Hw := Hcl $$ %0 %(imgM Mt4) Hd %⟨hdep4, by unfold maxCallDepth; omega⟩
+  ihave Hw := Hcl $$ %0 %(imgM Mt4) Hd %⟨by rw [hMt4, hi8, imgLE_store4_hit]; rfl, by
+    unfold maxCallDepth; omega⟩
   ihave #Himg := errCtx_img inp $$ HE
   ihave #Hrd := readable_rodata $$ Himg
   iapply ms_rtErrEval Wp hE ((step% jalx 0x80003cc4) live (fun p hp => hlive _ ((interp_code (by decide)) p hp)))
@@ -223,8 +220,7 @@ theorem cloErrDepth (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
   iframe Hcode HE Hrd Hms Hst Hw Hab
   ipureintro
   subst hR4
-  refine ⟨?_, by ix_reg; exact hdp.a1, by ix_reg, by ix_reg, by ix_reg, by ix_reg; exact hdp.sp⟩
-  first | (ix_reg; done) | (ix_reg; exact hdp.s2)
+  constructor <;> reg_close [hdp.a1, hdp.sp, hdp.s2]
 
 def CloKP (live : Nat → Prop) (N : NativeAddrs) (L : DlLayout) (Room : RoomPred) (inp : Nat)
     (Core : IProp GF) (Φ : Nat × String → IProp GF) (st2 : St) (d : Nat) (ca : Addr) (vs : List Value)

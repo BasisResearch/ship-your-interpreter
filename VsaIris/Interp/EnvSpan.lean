@@ -76,34 +76,23 @@ theorem regsOf_entry (rs : List Nat) (fixed : List (Nat × BitVec 64)) (clob : L
     (hperm : (fixed.map Prod.fst ++ clob).Perm rs) (hnd : rs.Nodup) :
     savedOwn (GF := GF) fixed ∗ clobbered clob ⊢
       ∃ R : Nat → BitVec 64, ⌜∀ p ∈ fixed, R p.1 = p.2⌝ ∗ regsOf rs R := by
-  have hnd' : (fixed.map Prod.fst ++ clob).Nodup := hperm.nodup_iff.2 hnd
-  have hfx : (fixed.map Prod.fst).Nodup := (List.nodup_append.1 hnd').1
-  have hcl : clob.Nodup := (List.nodup_append.1 hnd').2.1
-  have hdj := (List.nodup_append.1 hnd').2.2
+  obtain ⟨hfx, hcl, hdj⟩ := List.nodup_append.1 (hperm.nodup_iff.2 hnd)
   iintro ⟨Hf, Hc⟩
   ihave Hf := savedOwn_fn fixed hfx $$ Hf
   ihave ⟨%f, Hc⟩ := clobbered_fn clob hcl $$ Hc
   classical
-  obtain ⟨R, hR⟩ : ∃ R : Nat → BitVec 64,
-      R = fun k => if k ∈ fixed.map Prod.fst then pairVal fixed k else f k := ⟨_, rfl⟩
-  have e1 : sepL (GF := GF) (fixed.map Prod.fst) (fun r => r ↦ᵣ R r) =
-      sepL (fixed.map Prod.fst) (fun k => k ↦ᵣ pairVal fixed k) :=
-    sepL_congr fun k hk => by rw [hR]; simp only [hk, ite_true]
-  have e2 : sepL (GF := GF) clob (fun r => r ↦ᵣ R r) = sepL clob (fun k => k ↦ᵣ f k) :=
-    sepL_congr fun k hk => by
-      have : k ∉ fixed.map Prod.fst := fun h => hdj k h k hk rfl
-      rw [hR]; simp only [this, ite_false]
+  let R : Nat → BitVec 64 := fun k => if k ∈ fixed.map Prod.fst then pairVal fixed k else f k
   iexists R
   isplitr
   · ipureintro
-    intro p hp
-    have hm : p.1 ∈ fixed.map Prod.fst := List.mem_map_of_mem hp
-    simp only [hR, hm, ite_true]
-    exact pairVal_of_mem fixed hfx p hp
+    exact fun p hp => by simp only [R, List.mem_map_of_mem hp, ite_true, pairVal_of_mem fixed hfx p hp]
   unfold regsOf
   iapply (sepL_perm _ hperm).1
   iapply (sepL_append _ _ _).2
-  rw [e1, e2]
+  rw [sepL_congr (Φ := fun r => r ↦ᵣ R r) (Ψ := fun k => k ↦ᵣ pairVal fixed k) fun k hk => by
+      simp only [R, hk, ite_true],
+    sepL_congr (Φ := fun r => r ↦ᵣ R r) (Ψ := fun k => k ↦ᵣ f k) fun k hk => by
+      simp only [R, show k ∉ fixed.map Prod.fst from fun h => hdj k h k hk rfl, ite_false]]
   iframe Hf Hc
 
 theorem regsOf_exit (rs : List Nat) (fixed : List (Nat × BitVec 64)) (clob : List Nat)

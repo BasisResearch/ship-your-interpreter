@@ -1,4 +1,5 @@
 import VsaIris.Interp.CallClosure
+import VsaIris.Interp.RegRead
 
 namespace VsaIris.Interp
 
@@ -159,12 +160,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
       ¬ InExt (s.toNat - 1088 + 1048, 8) a → imgM Mt4 a = imgM Mt a := by
     intro a hf h0 h1 h2 h3
     simp only [InExt] at hf h0 h1 h2 h3
-    rw [hMt4, imgM_store_miss _ _ (by omega), hMt3, imgM_store_miss _ _ (by rw [hoff 1048 (by decide)]; omega),
-      imgM_store_miss _ _ (by rw [hi8]; omega), hM3f a (by simp only [InExt]; omega), hMt2,
-      imgM_store_miss _ _ (by rw [hoff 1032 (by decide)]; omega), hMt1,
-      imgM_store_miss _ _ (by rw [hoff 136 (by decide)]; omega),
-      imgM_store_miss _ _ (by rw [hoff 128 (by decide)]; omega),
-      imgM_store_miss _ _ (by rw [hoff 120 (by decide)]; omega)]
+    rd_back [hMt4, hMt3, hMt2, hMt1, hM3f, hoff, hi8]
   have hkeepM : ∀ o, 1056 ≤ o → o + 8 ≤ 1088 →
       ldv .ld Mt4 (s.toNat - 1088 + o) = ldv .ld Mt (s.toNat - 1088 + o) := fun o h1 h2 =>
     ldv_eqOn .ld (fun j hj => by
@@ -200,8 +196,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
     rw [imgLE_congr (n := 4) (img' := imgM (writeLog M3 [((inp + 8#64).toNat,
         4, BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 dep + 1#64)))]))
       (fun i hi => by
-        rw [hMt4, imgM_store_miss _ _ (by omega), hMt3,
-          imgM_store_miss _ _ (by rw [hoff 1048 (by decide)]; omega)]),
+        rd_back [hMt4, hMt3, hoff]),
       hi8, imgLE_store4_hit, hv]
   have hhd : CloHd R4 Mt4 Mt s aX sret inp ret (BitVec.ofNat 64 e) (BitVec.ofNat 64 q) vl rv argc dep := by
     refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ⟨?_, ?_, ?_, ?_⟩, h1048, h1032, h1016, hsp0, hdepth, ?_⟩
@@ -241,11 +236,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
       ¬ InExt (s.toNat - 1088 + 1032, 8) a → imgM Mt3 a = imgM Mt a := by
     intro a hf h1 h2
     simp only [InExt] at hf h1 h2
-    rw [hMt3, hM3f a (by simp only [InExt]; omega), hMt2,
-      imgM_store_miss _ _ (by rw [hoff 1032 (by decide)]; omega), hMt1,
-      imgM_store_miss _ _ (by rw [hoff 136 (by decide)]; omega),
-      imgM_store_miss _ _ (by rw [hoff 128 (by decide)]; omega),
-      imgM_store_miss _ _ (by rw [hoff 120 (by decide)]; omega)]
+    rd_back [hMt3, hMt2, hMt1, hM3f, hoff]
   have hkeepM : ∀ o, 1008 ≤ o → o + 8 ≤ 1088 → (o + 8 ≤ 1032 ∨ 1040 ≤ o) →
       ldv .ld Mt3 (s.toNat - 1088 + o) = ldv .ld Mt (s.toNat - 1088 + o) := fun o h1 h2 h3 =>
     ldv_eqOn .ld (fun j hj => by
@@ -299,12 +290,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
       imgM Mt3 a = imgM Mt a := by
     intro a hf h1 h2 h3
     simp only [InExt] at hf h1 h2 h3
-    rw [hMt3, imgM_store_miss _ _ (by rw [hoff 1048 (by decide)]; omega),
-      imgM_store_miss _ _ (by rw [hi8]; omega), hM3f a (by simp only [InExt]; omega), hMt2,
-      imgM_store_miss _ _ (by rw [hoff 1032 (by decide)]; omega), hMt1,
-      imgM_store_miss _ _ (by rw [hoff 136 (by decide)]; omega),
-      imgM_store_miss _ _ (by rw [hoff 128 (by decide)]; omega),
-      imgM_store_miss _ _ (by rw [hoff 120 (by decide)]; omega)]
+    rd_back [hMt3, hMt2, hMt1, hM3f, hoff, hi8]
   have hkeepM : ∀ o, 1008 ≤ o → o + 8 ≤ 1088 → (o + 8 ≤ 1032 ∨ 1056 ≤ o) →
       ldv .ld Mt3 (s.toNat - 1088 + o) = ldv .ld Mt (s.toNat - 1088 + o) := fun o h1 h2 h3 =>
     ldv_eqOn .ld (fun j hj => by
@@ -331,7 +317,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
     rw [imgLE_congr (n := 4) (img' := imgM (writeLog M3 [((inp + 8#64).toNat,
         4, BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 dep + 1#64)))]))
       (fun i hi => by
-        rw [hMt3, imgM_store_miss _ _ (by rw [hoff 1048 (by decide)]; omega)]),
+        rd_back [hMt3, hoff]),
       hi8, imgLE_store4_hit, hv]
   have hdp : CloDp R3 Mt3 s aX sret inp ret vl rv dep := by
     refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ⟨?_, ?_, ?_, ?_⟩, h1048, h1032, ?_, hdepth⟩

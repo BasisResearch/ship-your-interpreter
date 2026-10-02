@@ -129,29 +129,16 @@ theorem dispResL_of_argVals (N : NativeAddrs) (hd : DispSupply (GF := GF) N) (s 
     (B : List (Nat × Nat)) (img : Nat → BitVec 8) (base : Nat) :
     ∀ (vs : List Value) (i : Nat),
       storeRepr (GF := GF) N s B ∗ argVals N img base i vs ⊢ storeRepr N s B ∗ dispResL s vs
-  | [], _ => by
-    iintro ⟨Hs, -⟩
-    iframe Hs
-    unfold dispResL; simp only [sepL_nil]; iempintro
+  | [], _ => .rfl
   | v :: vs, i => by
-    unfold dispResL argVals
-    simp only [sepL_cons]
+    unfold argVals dispResL
     iintro ⟨Hs, #Hv, #Hvs⟩
-    ihave ⟨Hs, #Hd⟩ := (show iprop(storeRepr N s B ∗ valImg N img (base + 24 * i) v) ⊢
-        iprop(storeRepr N s B ∗ dispRes s v) from by
-      cases v with
-      | closure ca =>
-        unfold valImg valOf
-        iintro ⟨Hs, ⟨-, #Hc⟩⟩
-        iapply (hd s B ca _) $$ [$]
-      | _ =>
-        iintro ⟨Hs, -⟩
-        iframe Hs
-        unfold dispRes; iempintro) $$ [$]
     ihave ⟨Hs, #Hds⟩ := dispResL_of_argVals N hd s B img base vs (i + 1) $$ [$]
-    iframe Hs Hd
-    unfold dispResL at *
-    iexact Hds
+    rw [sepL_cons]; unfold dispResL at *; iframe Hds
+    cases v <;> unfold valImg <;> try (unfold dispRes; iframe Hs; done)
+    unfold valOf
+    icases Hv with ⟨-, #Hc⟩
+    iapply (hd s B _ _) $$ [$]
 
 end Vals
 
