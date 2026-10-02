@@ -291,3 +291,131 @@ Vsa/Sim/CheckedBoundary 6.1 → 6.7, Interp/SpecLoop, StrIris, IntOpRuns and Vsa
 
 The fresh set forecast −16% and the scope came in at −12% (the held-out draw over-represents the
 families the layers target; Vsa/Sim, a third of the modules, has few tactic-issued calls).
+
+## 9. Rollout (four agents, own worktrees from 5a7bcd1c, per-file +10% bound)
+
+Brief: `~/syi-r10/rollout-brief.md` (layers, per-call costs of every reused tactic (E57), the bound,
+tools). Each agent had its own worktree with the combination's build copied (E56); merged by the
+coordinator into `exp-R10-C` (35d22927 … 1ebcb7b5), full build green after each merge.
+
+| agent | territory | what did the work | files changed (+/−) | measured (base 5a7bcd1c → agent, one thread, interleaved) |
+|---|---|---|---|---|
+| R1 interpreter / exit drivers | `nx_run`/`nf_go`/`xh_step` normaliser, `xrun`, `ix_fwd`, `sym_run` | five more per-step passes as guarded `simp_set`; the second facts/`nx_norm` pass skipped only on the goal the same call just failed on; `dbm` before `sx_addr` in `ix_fwd`'s discharger; **defect fix**: `SymInterp.normHyps` expanded `sx_norm`/`ix_mem` and fed the expansion to `mkSimpContext`; after PB they expand to `simp_set`, the call threw, the catch swallowed it, and `sym_run` silently stopped normalising hypotheses (LogRuns 18 → 20.5 s, "geometry fact dropped") | 7 files, +46/−17 | 124 modules 1,823.8 → 1,725.3 s (−5.4%): ExitH/RunHead 52.8 → 45.6, RunWritten 39.7 → 34.4, Case/VarT 17.6 → 11.8, LogRuns 20.4 → 16.0 |
+| R2 stdout / fprintf / snprintf drivers | `nxNorm`, `nxTryPrune`, `nx_console`, `nx_mem_log`, `nx_fdisch`, per-file macros, `svf_mem` | guarded sets for the remaining passes; `omega_dcn`: refuse syntactically the no-wrap side goal `s.toNat + k < 2^64` with `k ≥ 2^63` (600 of 691 failing omega calls in Fwrite were this goal, tried by four stacked `nx_addr` expansions before `toNat_add_neg` applied) | 12 files, +69/−28 | 109 modules 872.5 → 823.8 s (−5.6%): Fwrite 29.8 → 24.3, Fputs 21.8 → 18.0, Flush 16.8 → 14.2, Sfvwrite 14.0 → 11.9 |
+| R3 allocator keys (owned Region) | key route, `rgn_arith`, `rd_log`, `rgn_ld` | simp-free key normaliser building its proof term (`linNF`), negative offsets by a floor fact (`lin_modneg`), two-atom keys (`Rgn.sub_end`/`sub_mid`), `key_or`: same-atom `=`/`≤`/`<`/`∧`/`∨` goals decided by a closed `Nat.ble`, cross-atom by one difference fact or one case split; tactics moved to a new `RegionTac.lean` (Region keeps the laws) | Region −433 +4 (moved), RegionTac +1,023, HeapPermit +2/−2 | 45 modules 708.9 → 606.4 s (−14.5%; −15.3% counting RegionTac's 6.1 s): FreeTrim 24.8 → 12.7, ReallocPrevN 20.3 → 11.8, MallocPaths 15.9 → 8.7; region fallbacks 31% → 3.8%; key route 1–9 ms per obligation (was 27 ms) |
+| R4 written omega (owned OmegaHint) | the project-wide `omega` front end; the heavy tail | `dbm` as first stage of the front end at ≥ 40 hypotheses (hint state updated after a `dbm` close, else later reduced runs got slower); byte-lane / lane-injectivity lemmas replacing four byte-recomposition omegas (ValueSpec 6.3 s call) and 28 `addr_off … (by omega)` in Setjmp | OmegaHint +42/−3, ValueSpec +12/−2, HeapTake +20/−9, ReallocCopy +20/−9, Setjmp +32/−28 | 16 files 195.3 → 166.1 s (−15%): Setjmp 14.5 → 4.8, HeapTake 8.9 → 4.0, ValueSpec 5.4 → 1.2, ReallocCopy 5.9 → 1.2, ReallocMal 16.4 → 14.6 |
+
+Consolidation (coordinator): R1 and R2 both moved the same five `nxNorm` passes onto sets and both
+registered `nx_upd_set`, `nx_toint_set`, `nx_subz_set`, `nx_prune_set`, `nx_console_set` (R1 in
+Stdout/Attr, R2 in SimpSets) — duplicate `register_simp_attr` names; kept R1's registrations and
+`nxNorm`, R2's other sets and `omega_dcn` (E57: two agents forked the same layer extension). After the
+final scope timing one file was over the bound (Interp/ProofEnvNew 2.23 → 3.86 s): the `dbm` stage
+on a goal `q.1 ≠ 1 ∧ q.1 ≠ 10 ∧ …` built the CNF of its negation, 2^k clauses, in pure code that no
+heartbeat budget interrupts (1.4 s before failing). Fix e6b3face: a capped clause count (`cnfLen`)
+decides before the search; ProofEnvNew 2.20 s.
+
+## 10. Measurements (e0981ae6 → 1153528b)
+
+**Full clean build** (`rm -rf .lake/build` of the project's own modules, dependencies kept; all default
+targets including executables; `LEAN_NUM_THREADS=10`; every run 0 errors, 0 `sorry` warnings). The
+machine is shared, so every sample is listed with its load:
+
+| commit | run | wall s | user s | load (1-min) |
+|---|---|---:|---:|---|
+| base e0981ae6 (1,552 jobs) | 1 | 608.6 | 4,851 | 8 → 17 |
+| | 2 | 569.7 | 4,526 | 9 → 10 |
+| | 3 | 639.9 | 5,014 | 11 → 19 |
+| final 1153528b (1,559 jobs) | 1 | 477.1 | 4,017 | 9 → 13 |
+| | 2 | 472.2 | 4,008 | 13 → 13 |
+| | 3 | 503.9 | 4,219 | 19 → 19 |
+| **median** | | **608.6 → 477.1 (−21.6%)** | **4,851 → 4,017 (−17.2%)** | |
+| min | | 569.7 → 472.2 (−17.1%) | 4,526 → 4,008 (−11.4%) | |
+
+(The pre-fix final 340263fb measured 449.0 / 454.7 s wall, 3,808 / 3,820 s user at load 7–12.)
+
+**Module CPU, all 627 modules of the scope** (single file, one thread, base and final interleaved per
+file, 16 shards, min of 2; load 10–20):
+
+| | base | final | change |
+|---|---:|---:|---:|
+| all 627 modules | 4,026.7 | 3,241.8 | **−19.5%** |
+| + the five new layer modules (Dbm 3.0, RegionTac 5.0, SimpGuard 1.5, SimpSets 0.7, OmegaHint 0.9) | | 3,252.9 | −19.2% |
+| VsaIris/Vsa (225) | 2,260.0 | 1,659.3 | −26.6% |
+| VsaIris/Interp (190) | 1,220.9 | 1,046.2 | −14.3% |
+| Vsa/Sim (212) | 545.8 | 536.3 | −1.8% |
+| census family R (23 region-dominated modules) | 455.9 | 259.7 | −43.0% |
+| census family T (105 step-driver modules) | 2,223.6 | 1,698.8 | −23.6% |
+| census family W (21 written-omega modules) | 222.8 | 175.0 | −21.5% |
+| primary held-out (6) | 61.51 | 44.28 | −28.0% |
+| fresh held-out (6) | 81.38 | 65.90 | −19.0% |
+
+Largest: MallocBlocks 44.6 → 21.1, Stdout/Fwrite 63.2 → 32.7, Stdout/Fputs 46.4 → 23.2, FreePaths 62.8
+→ 39.7, ReallocPrevN 27.3 → 11.7, ReallocMal 25.6 → 12.3, FreeBin 19.4 → 7.3, Setjmp 19.0 → 6.6,
+ReallocPrevT 37.7 → 21.9, ProofStringify 74.9 → 54.0, SnpSvf 79.1 → 59.1. **Per-file bound**: 19 files
+were over +10% and +0.2 s in the two-round sweep; re-timed five rounds interleaved, none is (all within
+−5%…+6%, ≤ 0.06 s); the earlier ProofEnvNew regression is gone (3.10 → 3.01 s).
+
+**Lines** (secondary): scope non-blank lines 114,965 → 116,710 (+1,745, +1.5%; plus `Vsa/OmegaHint.lean`
+161 lines outside the three directories); `git diff --shortstat e0981ae6` over Vsa/ and VsaIris/: 38
+files, +2,535 / −438. Setup is RegionTac 1,023 (433 moved from Region), Dbm 721, SimpGuard 264,
+OmegaHint 161, RegionCore +62; proof files changed: ValueSpec, HeapTake, ReallocCopy, Setjmp (byte
+lanes, +84 / −48); every other change is in tactic code.
+
+**Axioms** (the 14-line file): 12 theorems `[propext, Classical.choice, Quot.sound]`, the two WhileLogic
+adequacy theorems `[propext, Quot.sound]`. No `sorry`, `axiom`, `native_decide`, `bv_decide`,
+`ofReduceBool`, `maxHeartbeats`, `maxRecDepth` or `set_option` added (diff scan); `declaration uses
+'sorry'` 0 in every final build log.
+
+**Statements** (type hash of every constant of the `Vsa*` modules, base = e0981ae6, auxiliary constants
+excluded): 22,181 → 22,551 constants; **9 changed types**, 11 gone, 381 new, 23 moved. The 9 are
+`#ix_piece` intermediate states of three stderr runs (`fwriteErr_01/02/03/16/17`,
+`swsetupErr_01/02`, `sprintErr_01/02`): each piece's statement is the state its run reached, and the
+run (`nx_runB`) stops at 55% of the heartbeat budget, so a faster driver reaches a later pc (base
+0x80006114, after PB 0x800071d4, checked by hashing the pieces in every pilot tree: PB introduced it,
+PD did not). None is used outside its file; the chains they compose (`fwriteErr_run`, …) have identical
+types. The 11 gone are renumbered matcher auxiliaries (`match_1_74` …) and one macro-rules auxiliary;
+the 23 moved are the region tactics and meta code (Region → RegionTac, types unchanged).
+
+**Gate** (`--root`): 12 → 12 firing clusters, identical counts and trends (no decision-procedure
+cluster; this round was driven by time).
+
+## 11. Decision
+
+**Adopted (all four, as rolled out):** keys decide region membership and same-atom arithmetic
+(`RegionTac`: `rgnKeyed`, `key_or`), guarded registered simp sets for the drivers' per-step passes
+(`simp_set`), the reflective difference checker as first pass in the tactic dischargers and in the
+project-wide `omega` front end (`omega_dc`, `dbm`), and the hint front end that reuses the hypotheses
+earlier certificates used. Reasons, by §0: the combination cut the primary held-out modules 23% and the
+fresh 16% (forecast), the whole scope 12% before the rollout and 19.5% after, every file within the
+bound; the clean build falls 17–22% in wall time. Each pilot alone moved the primary set 2–17%; they act
+on disjoint calls and composed (PD 17% + PA 4% + PC 7% + PB 2% → 23% on the primary set).
+
+Required route (to be written into CLAUDE.md / the discipline rules when the branch carries them, C1):
+
+| task | use |
+|---|---|
+| a side-condition discharger inside a tactic | `omega_dc` (or `omega_dcn` where the no-wrap goal of a negative offset is tried), never bare `omega` |
+| a per-step normalisation pass in a driver | `simp_set SET` over a registered set; never `try simp only [long list]` per step |
+| region membership / same-atom address arithmetic | `rgn_side` / `rgn_arith` (keys first); never `unfold LdOK …; omega` |
+| a byte recomposition | `byte_lane` / `lane_inj_r4`, not `omega` over `/ 2^k % 256` |
+
+**Not adopted:** shape dispatch for the side-condition alternatives (alternatives that cannot match
+fail in microseconds; the costly failures depend on hypotheses); `dbm` on small contexts (slower than
+omega below ~40 hypotheses; the front end and `omega_dc` sites keep it where it pays); `omega_dc` in
+`sym_run`'s geometry tactic (+2% in ProofStringify, reverted by R1).
+
+## 12. Where the cost is now, and round-11 targets
+
+* **Successful normalisation, not failing calls.** After the guards, the drivers' cost is simp passes
+  that do rewrite (`nx_mem_keep`, `nx_addr` 11–25 s in the stdout runs; `xh_step`'s facts pass with
+  hypotheses, ≈12 s in RunIdle with 75% failing — a hypothesis list cannot be a registered set, so it
+  needs a hypothesis-aware guard or `simp_set` taking ad-hoc lists).
+* **Written omega with large contexts that are not difference constraints**: ReallocPrevT `pvT_fin`
+  (2.5 s, 73 hypotheses), HeapFree `release`, SnpPrint `ssputs_buf`, MemcpyLoops, EnvDefineSpans
+  (`sx_run` ≈ 70 calls × 0.3 s that `dbm` does not close).
+* **`dbm` kernel time** (≈ 6.5 ms per closed call) is now its main cost; `omega_dc` tries `dbm` a second
+  time inside the front end at ≥ 40 hypotheses (1.4–5 ms per failure).
+* **Budget-determined statements**: `#ix_piece` runs stop on heartbeats, so their intermediate
+  statements move whenever a tactic gets faster; a pc-based stop would make them stable.
+* Out of this round's scope: the boot witnesses' `decide +kernel` (435 s tactic, 238 s kernel), and
+  Vsa/Sim (−1.8%: few tactic-issued calls).
