@@ -398,3 +398,123 @@ files: they keep paying); (3) a tactic that replaces a hypothesis inside an `#ix
 post-state unnormalised (a changed generated statement) on another; (5) name clashes
 (`StackGeom.lower` already exists for the 176-byte frame) and namespace shadowing (`RtErr.InpGeom`
 under `open Vsa.RuntimeRepr`).
+
+## 10. Measurements (base 8f4bb737 = 78f9fb97 sources → final cc110310; `exp-R11` a887b3ba+ adds only this document)
+
+**Module CPU** (single file, one thread, base and final interleaved per file, 10 shards, min of 2, load
+9–24; flagged files re-timed 5 rounds interleaved, E64; `~/syi-r11/final/`):
+
+| | base | final | change |
+|---|---:|---:|---:|
+| the 62 target modules | 371.3 | 265.8 | **−28.4%** |
+| Proof (20) / Env (16) / Call (22) / Loop (4) | 154.1 / 97.7 / 83.2 / 36.3 | 120.9 / 50.1 / 67.6 / 27.2 | −22% / −49% / −19% / −25% |
+| primary held-out T (5) | 41.25 | 31.60 | −23.4% |
+| fresh held-out T (5) | 96.84 | 66.64 | −31.2% |
+| 251 affected modules outside the target (importers of SymInterp/KeyNF/FootKey/…) | 1,675.7 | 1,574.0 | −6.1% |
+| new layer modules (FootKey, KeyNF, RegRead) | – | ≈ 4 | |
+
+Largest: EnvDefineSpans 36.5 → 10.3, ProofStringify 50.3 → 38.2, EnvSetSpans 11.8 → 4.2, ProofNativePrint
+18.9 → 11.4, CallPrefix 10.0 → 3.4, EnvGetSpans 9.9 → 3.7, LoopFor 15.2 → 10.7, ProofNativeAssert 16.7 →
+12.2, ProofValueEqual 14.1 → 10.0; outside: SnpPrint 39.8 → 25.6, LeafArms 18.0 → 10.5, UnArm 16.5 → 10.8,
+SnpSvf 59.8 → 53.4. **Per-file bound:** 5 files flagged in the two-round sweep (MallocPro, CallCloExit,
+ExecExpr, SpecStringify, Case/CallArmP); re-timed five rounds interleaved: +0.0%, +3.9% (+0.11 s),
+−2.6%, −1.3%, +0.0%. In the earlier outside sweep only `VsaIris/Stack.lean` stayed above +10% (1.06 →
+1.19 s, +0.13 s: it gained the two `toNat_frame` lemmas); no file is over +10% and +0.2 s.
+
+**Full clean build** (`rm -rf .lake/build` of the project's own modules, dependencies kept; all default
+targets including executables; `LEAN_NUM_THREADS=10`; base and final alternated in two worktrees;
+every run 0 errors, 0 `declaration uses 'sorry'`):
+
+| commit | run | wall s | user s | load (1-min, start → end) |
+|---|---|---:|---:|---|
+| base 8f4bb737 (1,559 jobs) | 1 | 489.2 | 4,136 | 7.0 → 14.8 |
+| | 2 | 671.7 | 4,803 | 15.0 → 23.3 |
+| | 3 | 483.2 | 4,104 | 15.4 → 14.9 |
+| final cc110310 (1,562 jobs) | 1 | 450.0 | 3,832 | 14.8 → 15.0 |
+| | 2 | 482.8 | 4,000 | 23.3 → 15.4 |
+| | 3 | 448.8 | 3,810 | 14.9 → 13.5 |
+| **median** | | **489.2 → 450.0 (−8.0%)** | **4,136 → 3,832 (−7.4%)** | |
+| min | | 483.2 → 448.8 (−7.1%) | 4,104 → 3,810 (−7.2%) | |
+
+(The final also contains snapshot 10 of `exponentiate-next`, e4efc1f1, which changed only stdout/stderr
+run tactics and ITac budget helpers.)
+
+**Decision calls by issuer, census mode** (same spy as §1d, final tree): census user 365.7 → 259.3 s;
+tactic-issued `omega` 52.5 → 4.1 s (`sx_run` 28.8 → 0.1, `sym_run1` 13.2 → 0.9, `sym_run` 8.3 → 0.9,
+`ix_fwd` 1.3 → 0.3); `simp` issued by `sym_run1` 19.1 → 13.2, by `ix_fwd` 19.2 → 2.0, by `sx_run` 8.8 →
+3.6; written `omega` 47.3 → 44.4 s (now the largest single item).
+
+**Lines** (non-blank): the 62 target files 19,955 → 19,491 (−464, −2.3%; Proof 8,132 → 7,982, Env
+4,041 → 3,957, Call 5,198 → 4,979, Loop 2,584 → 2,573). Layer code: `VsaIris/Vsa/FootKey.lean` 440 (new),
+`VsaIris/Vsa/KeyNF.lean` 502 (≈ 490 moved unchanged from RegionTac/Region; RegionTac −509),
+`VsaIris/Interp/RegRead.lean` 36, geometry lemmas and tactics +62 (Stack, SeqLoopClosure, SymInterp,
+Repr ↔ SpecEnv move net 0). `git diff --shortstat e4efc1f1 cc110310 -- Vsa VsaIris`: 42 files, +1,469 /
+−1,315.
+
+**Axioms** (`lake env lean ~/syi-exp-logs/Ax.lean`, 14 lines): 12 theorems `[propext, Classical.choice,
+Quot.sound]`, the two WhileLogic adequacy theorems `[propext, Quot.sound]`. Diff scan of this round's
+changes (e4efc1f1..cc110310): no `sorry`, `axiom`, `native_decide`, `bv_decide`, `ofReduceBool`,
+`maxHeartbeats`, `maxRecDepth` or `set_option`; no edit to Stdout/Tac, StepGen, AllocTac, ITac or
+Stderr/*. `declaration uses 'sorry'`: 0 in every build log.
+
+**Statements** (type hash of every constant of the `Vsa*` modules, base 8f4bb737 vs final, auxiliary
+constants excluded; `~/syi-r11/hash/`): 43 changed types, 14 gone, 88 new, 137 moved. The 43: 42
+interpreter run pieces and their run-chain lemmas restated with geometry records (`CallK_runA–D`,
+`Call_run1/2`, `Call_runTM`, `CallN_run1/2`, `CallX_run1`, `ArgsLoop_runA/B`, `CloB_*`, `CloX_*`,
+`CloE_runA/D`, `callCloHead_*`, `callPrefixT_*`, `callPrefixP_*`, `callNativeOut_p1–3`), every user in
+the changed files (the full build checks it), none a headline or tool theorem; plus `nxRunCore` from
+snapshot 10. Gone: `hoff'`, `StackGeom.lowerE`, `stackGeom_evalSP` (duplicates merged into
+`StackGeom.lowerEval`), three auto-generated `congr_simp`, and snapshot 10's removed stdout tactic
+syntaxes. Moved: the key normaliser (RegionTac/Region → KeyNF) and `RamWin` (SpecEnv → Repr), types
+unchanged. All 12 held-out declarations keep their hashes.
+
+**Gate** (`--root`): 12 → 12 firing clusters. The two target clusters shrank but still fire: `Call run`
+13 → 8 lines per proof (both quarters), `Clo run` 13 → 9 first quarter, 10 → 7 last; the rule needs the
+last quarter a third below the first, and a uniform restatement shrinks both (E70).
+
+## 11. Decision
+
+**Adopted:**
+
+1. **Footprint keys (PA, rolled out by R1)** — the existing key normaliser made to reach the run
+   tactics' side goals: `foot_key` as an `sx_addr`/`sx_side` alternative and first stage of `sym_run`
+   geometry, `foot_or` as `ix_fwd`/`ix_mem`'s discharger, the region-free half of RegionTac moved down
+   into `KeyNF`. Reasons by §0 (suite T, time): primary −20.0% and fresh −22.5% in the bake-off against
+   −4.5%/−3.6% for the ontologists' datatype version (PB); whole target −20.7% for the combination and
+   −28.4% after the rollout; 251 outside importers −6.1%; every file within the bound; clean build −7 to
+   −8%. Setup 440 new lines (+ 490 moved).
+2. **Geometry records as certificates (PC, rolled out by R2)** — `toNat_frame`/`toNat_frame_off`,
+   `EvalFrameG.off`, `StackGeom.evalFrame`/`.lowerEval`, `RamWin.ofEnds`, `geom_open`/`with_geom`,
+   `with_frame`; run-piece statements take records. Reasons: on its own cluster (the gate's two run
+   clusters and the hand stack-geometry idiom) it removed ≈ 190 lines in the rollout plus 34 in the
+   pilot for 72 setup lines, time-neutral. On the random held-out suite it bought −4 lines (fresh: 0):
+   it is adopted for the run-piece statements and frame arithmetic, not as a general line saver.
+
+**Not adopted:** PD's read-back/keep rules (`rd_back`, `reg_keep`) as a required route: −20 lines on
+the primary suite, −9 (1.5%) on the fresh suite, 36 setup lines, 0.15–0.6 s per call against ≈ 20 ms
+for the hand steps (two uses reverted for time in the pilot, three in the fresh cases). `RegRead.lean`
+stays because six existing call sites use it at no measured file cost; new proofs should use the hand
+`imgM_store_miss` chain or `rd_back` only where the file stays inside the bound. PB's atlas datatype
+(its local-chart idea lives on inside `foot_key`). Translation-equivariant runs (not piloted).
+
+Required route (to be written into CLAUDE.md / the discipline rules when the branch carries them, C1):
+
+| task | use |
+|---|---|
+| a footprint / address side goal in a run tactic (`sx_side`, `sx_addr`, `sym_run` geometry, `ix_fwd`) | `foot_key` (automatic); never a per-file `sx_side` macro that unfolds the footprint |
+| a stack-frame offset `(s + 2^64−c).toNat` | `toNat_frame rfl (…)` / `EvalFrameG.off` / `StackGeom.evalFrame`; never `rw [BitVec.toNat_add]; simp; omega` |
+| a run piece's stack and pointer windows | `(hfg : EvalFrameG s)`, `RamWin a n`, `InpGeom`, with `with_geom`/`with_frame` in the body |
+
+## 12. Where the cost is now, and round-12 targets
+
+* **Written `omega`** (2,609 calls, 44.4 s of 259 s in census mode) is now the largest single item, as
+  in round 10; most see a `%` hypothesis in context.
+* **`sym_run1`'s own normalisation `simp`** (13.2 s, 764 failing calls) and `sx_run`'s (3.6 s): the
+  successful passes, not the side goals.
+* **The do-not-edit run tactics still pay the false-probe pattern** `foot_or` removed from `ix_fwd`:
+  AllocTac's `sx_mem` and `sx_addr`/`bv1`/`bv2`, ITac's `ix_mem`/`ix_ro` (≈ 0.3–1.1 s per heavy file).
+  When those files are free, routing their dischargers through `foot_or` is a one-line change each.
+* **Lines**: the Iris/helper proofs' lines are spec-specific glue; agents' cleanup passes removed 8–20%
+  of the drawn cases without any layer (incumbent debt, not an abstraction target); the per-function Ctx
+  records' `hs1..hs4` windows did not pay to move to `StackGeom`.
+* The gate's two run clusters need a baseline floor entry after this round (E70).
