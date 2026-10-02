@@ -18,16 +18,16 @@ structure SprintPost (Mt Mt' : Mem) (sp : BitVec 64) : Prop where
 
 set_option hygiene false in
 
-macro "sprint_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11, h12, hres, hiov,
+macro "sprint_step" k:num : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11, h12, hres, hiov,
   hp, hk0, hk0z, ne_eq, not_false_eq_true, hfl, hbase, hwr, hck, BitVec.add_assoc, BitVec.zero_add, BitVec.reduceXOr]
-  at 0x8000efd4))
+  at 0x8000efd4 #steps $k))
 
 set_option hygiene false in
 
-macro "sprint_mid" : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19,
+macro "sprint_mid" k:num : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19,
   rk20, rk21, rk22, rk23, rk24, rk25, rk26, rk27, h1, h2, h10, h11, h12, hres, hiov,
   hp, hk0, hk0z, ne_eq, not_false_eq_true, hfl, hbase, hwr, hck, BitVec.add_assoc,
-  BitVec.zero_add, BitVec.reduceXOr, List.length_singleton] at 0x8000efd4))
+  BitVec.zero_add, BitVec.reduceXOr, List.length_singleton] at 0x8000efd4 #steps $k))
 
 #ix_piece sprintErr_01 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
@@ -54,19 +54,19 @@ macro "sprint_mid" : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk
       (outS s need) Q (t ++ putcs bs) ra R' Mt') :
     SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs (outS s need) Q t
       0x8000e8cc#64 R Mt by
-  nx_win sp 256 592; sprint_step
+  nx_win sp 256 592; sprint_step 49
 
 #ix_piece sprintErr_02 from sprintErr_01 by
-  sprint_step
+  sprint_step 1
 
 #ix_piece sprintErr_03 from sprintErr_02 by
-  sprint_step
+  sprint_step 1
 
 #ix_piece sprintErr_04 from sprintErr_03 by
-  sprint_step
+  sprint_step 1
 
 #ix_piece sprintErr_05 from sprintErr_04 by
-  sprint_step
+  sprint_step 1
 
 #ix_piece sprintErr_06 from sprintErr_05 by
   nx_clear_conds
@@ -88,16 +88,16 @@ macro "sprint_mid" : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk
     rw [sext_extract32_small (by simp only [BitVec.toNat_ofNat]; omega)]
   · exact ⟨List.mem_append_right _ (hpsrc i hi).1, (hpsrc i hi).2⟩
   nx_ret hR
-  sprint_mid
+  sprint_mid 24
 
 #ix_piece sprintErr_07 from sprintErr_06 by
-  sprint_mid
+  sprint_mid 1
 
 #ix_piece sprintErr_09 from sprintErr_07 by
-  sprint_mid
+  sprint_mid 1
 
 #ix_piece sprintErr_10 from sprintErr_09 by
-  sprint_mid
+  sprint_mid 1
 
 #ix_piece sprintErr_11 from sprintErr_10 by
   nx_clear_conds

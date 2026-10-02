@@ -23,16 +23,16 @@ theorem imgLE_fillR_out (M : Mem) {lo n a k : Nat} (g : Nat → BitVec 8)
 
 set_option hygiene false in
 
-macro "fwrite_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11, h12, h13, hDt,
+macro "fwrite_step" k:num : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11, h12, h13, hDt,
   hC.sinit, hE.flagsU, hE.flagsS, hE.fd, hE.base, hE.cookie, hE.writer, hE.lock, hE.lockMode,
-  BitVec.add_assoc, BitVec.zero_add, hn0, ldv_ld_and_640, BitVec.reduceXOr] at 0x8000f230))
+  BitVec.add_assoc, BitVec.zero_add, hn0, ldv_ld_and_640, BitVec.reduceXOr] at 0x8000f230 #steps $k))
 
 set_option hygiene false in
 
-macro "fwrite_mid" : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19,
+macro "fwrite_mid" k:num : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19,
   rk20, rk21, rk22, rk23, rk24, rk25, rk26, rk27, h1, h2, h10, h11, h12, h13, hDt,
   hC.sinit, hE.fd, hE.cookie, hE.writer, hE.lock, hE.lockMode,
-  BitVec.add_assoc, BitVec.zero_add, hn0, BitVec.reduceXOr] at 0x8000efd4))
+  BitVec.add_assoc, BitVec.zero_add, hn0, BitVec.reduceXOr] at 0x8000efd4 #steps $k))
 
 #ix_piece fwriteErr_01 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
@@ -56,22 +56,22 @@ macro "fwrite_mid" : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk
   nx_win s 768 0
   nx_runB hlive using [h1, h2, h10, h11, h12, h13, hDt,
   hC.sinit, hE.flagsU, hE.flagsS, hE.fd, hE.base, hE.cookie, hE.writer, hE.lock, hE.lockMode,
-  BitVec.add_assoc, BitVec.zero_add, hn0, ldv_ld_and_640, BitVec.reduceXOr] at 0x8000f230
+  BitVec.add_assoc, BitVec.zero_add, hn0, ldv_ld_and_640, BitVec.reduceXOr] at 0x8000f230 #steps 87
 
 #ix_piece fwriteErr_02 from fwriteErr_01 by
-  fwrite_step
+  fwrite_step 1
 
 #ix_piece fwriteErr_03 from fwriteErr_02 by
-  fwrite_step
+  fwrite_step 1
 
 #ix_piece fwriteErr_04 from fwriteErr_03 by
-  fwrite_step
+  fwrite_step 1
 
 #ix_piece fwriteErr_05 from fwriteErr_04 by
-  fwrite_step
+  fwrite_step 1
 
 #ix_piece fwriteErr_06 from fwriteErr_05 by
-  fwrite_step
+  fwrite_step 1
 
 #ix_piece fwriteErr_07 from fwriteErr_06 by
   refine swsetupErr_run (hlive := hlive) (t := t) (s := s) (need := 768) (hs3 := hs3) (hs4 := hs4)
@@ -84,25 +84,25 @@ macro "fwrite_mid" : tactic => `(tactic| (nx_runB hlive using [rk1, rk2, rk8, rk
 
 #ix_piece fwriteErr_08 from fwriteErr_07 by
   nx_ret hR
-  fwrite_mid
+  fwrite_mid 30
 
 #ix_piece fwriteErr_09 from fwriteErr_08 by
-  fwrite_mid
+  fwrite_mid 1
 
 #ix_piece fwriteErr_10 from fwriteErr_09 by
-  fwrite_mid
+  fwrite_mid 1
 
 #ix_piece fwriteErr_11 from fwriteErr_10 by
-  fwrite_mid
+  fwrite_mid 1
 
 #ix_piece fwriteErr_12 from fwriteErr_11 by
-  fwrite_mid
+  fwrite_mid 1
 
 #ix_piece fwriteErr_13 from fwriteErr_12 by
-  fwrite_mid
+  fwrite_mid 1
 
 #ix_piece fwriteErr_14 from fwriteErr_13 by
-  fwrite_mid
+  fwrite_mid 1
 
 #ix_piece fwriteErr_15 from fwriteErr_14 by
   nx_clear_conds
@@ -135,58 +135,58 @@ macro "nx_ret2 " h:ident : tactic => `(tactic| (
 
 set_option hygiene false in
 
-macro "fwrite_tail" : tactic => `(tactic| nx_runB hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19,
+macro "fwrite_tail" k:num : tactic => `(tactic| nx_runB hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19,
   rk20, rk21, rk22, rk23, rk24, rk25, rk26, rk27, h1, h2, hbn, hDt, hC.sinit, hE.lockMode,
-  BitVec.add_assoc, BitVec.zero_add, BitVec.reduceXOr, BitVec.reduceAnd, BitVec.reduceOr])
+  BitVec.add_assoc, BitVec.zero_add, BitVec.reduceXOr, BitVec.reduceAnd, BitVec.reduceOr] #steps $k)
 
 #ix_piece fwriteErr_16 from fwriteErr_15 by
   nx_ret2 hR
-  fwrite_tail
+  fwrite_tail 38
 
 #ix_piece fwriteErr_17 from fwriteErr_16 by
-  fwrite_tail
+  fwrite_tail 1
 
 #ix_piece fwriteErr_18 from fwriteErr_17 by
-  fwrite_tail
+  fwrite_tail 1
 
 #ix_piece fwriteErr_19 from fwriteErr_18 by
-  fwrite_tail
+  fwrite_tail 1
 
 #ix_piece fwriteErr_20 from fwriteErr_19 by
-  fwrite_tail
+  fwrite_tail 1
 
 #ix_piece fwriteErr_21 from fwriteErr_20 by
-  fwrite_tail
+  fwrite_tail 1
 
 #ix_piece fwriteErr_22 from fwriteErr_21 by
-  fwrite_tail
+  fwrite_tail 1
 
 #ix_piece fwriteErr_23 from fwriteErr_22 by
-  fwrite_tail
+  fwrite_tail 1
 
 #ix_piece fwriteErr_24 from fwriteErr_23 by
-  fwrite_tail
+  fwrite_tail 1
 
 #ix_piece fwriteErr_25 from fwriteErr_24 by
-  fwrite_tail
+  fwrite_tail 1
 
 #ix_piece fwriteErr_26 from fwriteErr_25 by
-  fwrite_tail
+  fwrite_tail 1
 
 #ix_piece fwriteErr_27 from fwriteErr_26 by
-  fwrite_tail
+  fwrite_tail 1
 
 #ix_piece fwriteErr_28 from fwriteErr_27 by
-  fwrite_tail
+  fwrite_tail 1
 
 #ix_piece fwriteErr_29 from fwriteErr_28 by
-  fwrite_tail
+  fwrite_tail 1
 
 #ix_piece fwriteErr_30 from fwriteErr_29 by
-  fwrite_tail
+  fwrite_tail 1
 
 #ix_piece fwriteErr_31 from fwriteErr_30 by
-  fwrite_tail
+  fwrite_tail 1
 
 #ix_piece fwriteErr_32 from fwriteErr_31 by
   try simp only [swriteErrMt, swsetupErrMt]

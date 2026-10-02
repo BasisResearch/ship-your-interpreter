@@ -131,10 +131,9 @@ def nxTryPrune (facts : Array Term) (norm : Syntax) (g : MVarId) : TacticM Bool 
 open Lean Elab Tactic Meta in
 def nxRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
     (fs : Option (Syntax.TSepArray `term ",")) (stops : Option (Array (TSyntax `num)))
-    (budgetPct : Nat := 0) :
+    (budgetPct : Nat := 0) (stepLimit : Option Nat := none) :
     TacticM Unit := do
     let budget := (n.map (·.getNat)).getD 400
-    let ctx ← readThe Core.Context
     let stopPCs : List Nat := match stops with
       | some ss => ss.toList.map (·.getNat)
       | none => []
@@ -155,14 +154,16 @@ def nxRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
       catch _ => saved.restore; pure first
 
     let mut work : List (MVarId × Nat) := [(first, budget)]
+    let mut taken := 0
     while !work.isEmpty do
       let (cur, fuel) := work.head!
       work := work.tail!
       if fuel == 0 then stuck := stuck ++ [cur]; continue
 
-      if budgetPct != 0 && ctx.maxHeartbeats != 0 then
-        let used := (← IO.getNumHeartbeats) - ctx.initHeartbeats
-        if used * 100 > ctx.maxHeartbeats * budgetPct then stuck := stuck ++ [cur]; continue
+      if let some k := stepLimit then
+        if taken ≥ k then stuck := stuck ++ [cur]; continue
+      if ← runOverBudget budgetPct then throwRunBudget budgetPct taken stepLimit
+      taken := taken + 1
       if let some pc ← cur.withContext (do swpPC? (← cur.getType)) then
         if stopPCs.contains pc then stuck := stuck ++ [cur]; continue
       let some (conts, pend) ← ixStep norm h cur | stuck := stuck ++ [cur]; continue
@@ -207,12 +208,13 @@ def nxRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
 
 syntax "nx_run " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
 
-syntax "nx_runB " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? : tactic
+syntax "nx_runB " ("[" num "] ")? term (" using " "[" term,* "]")? (" at " num+)? " #steps " num : tactic
 
 open Lean Elab Tactic Meta in
 elab_rules : tactic
   | `(tactic| nx_run $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => nxRunCore true n h fs stops
-  | `(tactic| nx_runB $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => nxRunCore true n h fs stops 55
+  | `(tactic| nx_runB $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]? #steps $k) =>
+    nxRunCore true n h fs stops 55 (some k.getNat)
 
 macro_rules | `(tactic| nx_addr) => `(tactic| (simp_set nx_outs_set at ⊢; (try simp (disch := omega_dcn) only [toNat_add_lit, toNat_add_neg, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceSub, Nat.reduceMod, Nat.reduceAdd]); first | done | omega_dc))
 
