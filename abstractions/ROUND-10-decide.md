@@ -441,7 +441,7 @@ All 45 `nx_runB` sites (6 inline, 39 through the 7 macros, in Stderr/FwriteRun, 
 VfpErr, VfpEntry, FprintfHead) state K = the steps the run takes at 8f4bb737; adding a K equal to
 the run's own count does not change what the run does. At 8f4bb737 no run hit the budget any more
 (round 10 made them fast enough; the highest is `fwriteErr_01`, 87 steps at 45% of the budget), so
-freezing them needed no budget-stopped state replayed. 37 of the 45 take 1 step (the goal is already
+freezing them needed no budget-stopped state replayed. 36 of the 45 take 1 step (the goal is already
 at the `at` pc, or no step applies: the leftovers of the old budget-stopped chains); the rest are
 `fwriteErr_01` 87, `_08` 30, `_16` 38, `sprintErr_01` 49, `_06` 24, `swsetupErr_01` 50,
 `vfpErr_01` 33, `vfpErr_02` 6, `fprintfHead_01` 18.
