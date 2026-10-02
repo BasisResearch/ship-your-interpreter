@@ -174,3 +174,78 @@ Suite L (declarations re-proved with identical statements; population: the 177 t
 Law-precondition classes of the drawn L cases (E54, by regex over each body): `cloErrDepth` geom +
 bracket, `whileStage` keep + bracket, `def_grow` bracket; the other nine contain none of the idioms
 of L-geom/L-readback/L-keep. Of the 177 units, 72 contain none.
+
+## 4. Blind ontologists
+
+Four agents (three random 256-character seeds, one random dictionary sentence; seeds pasted as
+literal text and echoed back by every agent, E53) got only `~/syi-r11/fanout/brief.md`: the semantics,
+the census, the laws, the existing abstractions the target can import (with use counts, import
+position and per-call cost), the real restrictions of the decision procedures, the forbidden
+vocabulary and three held-out statements. Each returned five candidates in 128–177 s.
+
+| candidate | agents | rules = laws | rank given | decided by |
+|---|---:|---|---|---|
+| F. charted footprints / atlas / cadastre: a footprint is a list of atom-keyed charts; an address normalised to atom + literal is looked up by atom and checked by a closed `Nat.ble`; one bridge lemma per footprint definition; delivered as a `sx_side` alternative reusing RegionTac's `linNF`/`key_or` | 4/4 | L-foot, L-wrap | 1st by 4/4 | syntactic lookup + closed computation; fallback to the existing path |
+| G. frame/object certificates (FrameCert/ObjCert, datum, epoch/passport): one stack certificate and one per object, every window and no-wrap fact a projection; `ofFields` adapters for frozen statements; statement compression for the gate clusters | 4/4 | L-geom, L-wrap | 2nd by 4/4 | projections; literal checks; one small `omega`/`dbm` when n is symbolic |
+| W. keyed write ledger: memory after a run as base ⊕ log of keyed entries, reads evaluated by a reflective `readK` | 4/4 | L-readback | 3rd–4th | closed computation; stuck on symbolic offsets |
+| K. calling-convention envelope / ABI functor / spill-restore liturgy: prologue/epilogue proved once by induction over the saved list, one bracket lemma per function | 4/4 | L-kit | 3rd–5th | `decide` on instruction words vs generated text; flagged: irregular prologues stay by hand |
+| T. translation-equivariant runs (relocation, transposition) | 4/4 | L-translate | 4th–5th | `decide` on PIC words; needs a step-commutation lemma against Sail (the expensive part) |
+
+Every agent ranked the same five in nearly the same order and recommended F first (fused with the
+minimal floor-fact part of G). Theories cited: manifold atlases (Lee), base+offset alias analysis
+and value-set analysis (Wilson & Lam 1995; Balakrishnan & Reps 2004), CHERI capability bounds
+(Woodruff et al. 2014), Torrens title registration, region calculus (Tofte & Talpin 1997), DBMs
+(Miné 2001), proof-carrying code (Necula 1997), CompCert block/offset memory and Stacking (Leroy &
+Blazy 2008; Leroy 2009), crystallographic unit cells, calendrical day numbers (Dershowitz & Reingold),
+McCarthy arrays, ARIES/LSM logs, event sourcing, double-entry bookkeeping, XCAP, STAL, effect handlers
+and `bracket`, relocation (Levine 2000), Noether/equivariance, transformational music theory (Lewin).
+
+## 5. Retrieval by law
+
+All five are **known**, and four already exist at another layer of this project:
+
+* F: base+offset / value-set analysis; here round 10's `RegionTac` keys decide L-foot for the
+  allocator's `Rgn`/`ARgn` regions (1–9 ms per obligation) and round 3's `Win` for newlib. `RegionTac`
+  is already in the import closure of the heavy target modules and registers `rgn_side` as an
+  `sx_side` alternative, which returns at once on footprints (no `Rgn` facts).
+* G: proof-carrying certificates; the records exist (`StackGeom`, `SlotGeom`, `ArgsGeom`, `EvalFrameG`,
+  `SlotWin`, `RamWin`); only `VeqCtx` and 15 files use `StackGeom`.
+* W: McCarthy arrays; the run tactics already read memory through `writeLog` chains with the
+  `sx_mem_set`/`ix_mem_set` simp sets; `carry_close` (round 8) consumes the same chains.
+* K: CompCert callee-save invariants; round 4's SEAM candidate (family call seams) was this law at
+  the call side and was not adopted.
+* T: relocation; round 8's `HostRun` is the text-parametric analogue (same code, other host text),
+  not translation.
+
+## 6. Variation
+
+`/ideonomy` draw: organon construction × substitution, organon *map*, prompts scope / decomposability
+/ longevity, applied to F and G. Map (x: when the key is computed, y: what carries it):
+
+```
+                 | per side goal          | per run (hoisted)         | per footprint definition | per frame (certificate)
+-----------------+------------------------+---------------------------+--------------------------+------------------------
+the address      | linNF + key_or (PA)    | normalise R 2 -> s once   | -                        | G's .off projection
+the footprint    | unfold disjuncts, pick | footprint pre-unfolded    | bridge lemma (F, PB)     | frame chart = projection
+                 | by atom (PA)           | once into ordered InExt   |                          | of the certificate (F x G)
+the register     | "R 2 is the stack atom": key by register index, no normalisation (substitution: address -> register)
+```
+
+Substitutions read off the map: scope one goal → the meet (key the unfolded `InExt` disjunction by
+the address atom with the existing `key_or`, no datatype, PA); longevity per definition → F's bridge
+lemmas (PB); decomposability fused → the frame chart is a projection of the stack certificate (F × G);
+address → register (key by `R 2` syntactically) is cheap but brittle (writes through other base
+registers) and stays a precheck inside PA. Following E25/E32/E41/E47 the meets are piloted for every
+cluster, and the unanimous first pick is also piloted as a new datatype:
+
+* **PA** (F as the meet, time): the existing key route made to reach footprint goals (`sx_side`
+  alternative / `rgn_side` extension, `sym_run`/`sym_run1` side goals), no new datatype.
+* **PB** (F as the ontologists built it): `Atlas`/chart datatype, bridge lemmas per footprint
+  definition, `chart_mem`.
+* **PC** (G as the meet, lines): projections on the existing geometry records, used in the held-out
+  re-proofs and to restate one gate cluster.
+* **PD** (W + K as the meet, lines): read-back and register-keep/exit rules over the existing
+  `writeLog`/`imgM` terms and register lemmas, no ledger type.
+
+T (translation) is not piloted: its saving is bounded by one duplicated pair (≈ 160 lines, ≈ 11 s)
+and its setup needs a step-commutation lemma against the Sail model.
