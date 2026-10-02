@@ -1,0 +1,197 @@
+{
+ "seed": 20261002,
+ "drawn": "2026-10-02, before any candidate",
+ "modules_T": {
+  "Rs": {
+   "population": [
+    "VsaIris/Interp/EnvDefineSpans.lean",
+    "VsaIris/Interp/EnvGetHit.lean",
+    "VsaIris/Interp/EnvGetSpans.lean",
+    "VsaIris/Interp/EnvSetHit.lean",
+    "VsaIris/Interp/EnvSetSpans.lean"
+   ],
+   "primary": [
+    "VsaIris/Interp/EnvGetHit.lean"
+   ],
+   "fresh": [
+    "VsaIris/Interp/EnvSetSpans.lean"
+   ]
+  },
+  "Ri": {
+   "population": [
+    "VsaIris/Interp/CallCloHead.lean",
+    "VsaIris/Interp/CallCloRuns.lean",
+    "VsaIris/Interp/CallClosure.lean",
+    "VsaIris/Interp/CallPrefix.lean",
+    "VsaIris/Interp/ProofArith.lean",
+    "VsaIris/Interp/ProofNativeAssert.lean",
+    "VsaIris/Interp/ProofNativePrint.lean",
+    "VsaIris/Interp/ProofStringify.lean",
+    "VsaIris/Interp/ProofValueKindName.lean"
+   ],
+   "primary": [
+    "VsaIris/Interp/ProofValueKindName.lean",
+    "VsaIris/Interp/ProofNativeAssert.lean"
+   ],
+   "fresh": [
+    "VsaIris/Interp/CallPrefix.lean",
+    "VsaIris/Interp/ProofStringify.lean"
+   ]
+  },
+  "W": {
+   "population": [
+    "VsaIris/Interp/CallCloBind.lean",
+    "VsaIris/Interp/CallCloP.lean",
+    "VsaIris/Interp/EnvDefineArms.lean",
+    "VsaIris/Interp/EnvDefineGrow.lean",
+    "VsaIris/Interp/EnvScan.lean",
+    "VsaIris/Interp/LoopArgs.lean",
+    "VsaIris/Interp/LoopFor.lean",
+    "VsaIris/Interp/LoopWhile.lean",
+    "VsaIris/Interp/ProofNativePrintln.lean",
+    "VsaIris/Interp/ProofValueEqual.lean",
+    "VsaIris/Interp/ProofValuePrint.lean"
+   ],
+   "primary": [
+    "VsaIris/Interp/LoopArgs.lean",
+    "VsaIris/Interp/CallCloP.lean"
+   ],
+   "fresh": [
+    "VsaIris/Interp/LoopWhile.lean",
+    "VsaIris/Interp/ProofValuePrint.lean"
+   ]
+  }
+ },
+ "declarations_L": [
+  {
+   "role": "primary",
+   "stratum": 0,
+   "file": "VsaIris/Interp/CallNative.lean",
+   "name": "dispResL_of_argVals",
+   "line": 128,
+   "lines": 27,
+   "sec": 0.156618,
+   "cls": []
+  },
+  {
+   "role": "primary",
+   "stratum": 0,
+   "file": "VsaIris/Interp/EnvSpan.lean",
+   "name": "regsOf_entry",
+   "line": 75,
+   "lines": 33,
+   "sec": 0.066665,
+   "cls": []
+  },
+  {
+   "role": "fresh",
+   "stratum": 0,
+   "file": "VsaIris/Interp/LoopWhile.lean",
+   "name": "whileStage",
+   "line": 97,
+   "lines": 26,
+   "sec": 0.135955,
+   "cls": [
+    "keep",
+    "bracket"
+   ]
+  },
+  {
+   "role": "fresh",
+   "stratum": 0,
+   "file": "VsaIris/Interp/ProofValuePrint.lean",
+   "name": "vp_native",
+   "line": 261,
+   "lines": 36,
+   "sec": 0.865078,
+   "cls": []
+  },
+  {
+   "role": "primary",
+   "stratum": 1,
+   "file": "VsaIris/Interp/EnvDefineCalls.lean",
+   "name": "wp_call_reallocOpt",
+   "line": 337,
+   "lines": 60,
+   "sec": 0.276736,
+   "cls": []
+  },
+  {
+   "role": "primary",
+   "stratum": 1,
+   "file": "VsaIris/Interp/CallCloP.lean",
+   "name": "cloErrDepth",
+   "line": 180,
+   "lines": 48,
+   "sec": 0.340575,
+   "cls": [
+    "geom",
+    "bracket"
+   ]
+  },
+  {
+   "role": "fresh",
+   "stratum": 1,
+   "file": "VsaIris/Interp/EnvDefineCalls.lean",
+   "name": "wp_call_reallocNull",
+   "line": 270,
+   "lines": 43,
+   "sec": 0.169461,
+   "cls": []
+  },
+  {
+   "role": "fresh",
+   "stratum": 1,
+   "file": "VsaIris/Interp/ProofValuePrint.lean",
+   "name": "roOwn_clod",
+   "line": 412,
+   "lines": 44,
+   "sec": 0.183554,
+   "cls": []
+  },
+  {
+   "role": "primary",
+   "stratum": 2,
+   "file": "VsaIris/Interp/ProofStringify.lean",
+   "name": "sg_memcpy",
+   "line": 800,
+   "lines": 132,
+   "sec": 0.984582,
+   "cls": []
+  },
+  {
+   "role": "primary",
+   "stratum": 2,
+   "file": "VsaIris/Interp/ProofEnvSet.lean",
+   "name": "frame_write_close",
+   "line": 217,
+   "lines": 82,
+   "sec": 0.348644,
+   "cls": []
+  },
+  {
+   "role": "fresh",
+   "stratum": 2,
+   "file": "VsaIris/Interp/EnvDefineGrow.lean",
+   "name": "def_grow",
+   "line": 243,
+   "lines": 400,
+   "sec": 3.933066,
+   "cls": [
+    "bracket"
+   ]
+  },
+  {
+   "role": "fresh",
+   "stratum": 2,
+   "file": "VsaIris/Interp/ProofStringify.lean",
+   "name": "sg_filled",
+   "line": 1173,
+   "lines": 64,
+   "sec": 0.356711,
+   "cls": []
+  }
+ ],
+ "L_population": "theorem units of the 62 target modules with conclusion head WP or other theorem (not runs, not #ix_*), >= 25 non-blank lines (177 units, 11,086 lines), 3 size strata, random.Random(20261002).sample(stratum,4): first two primary, last two fresh",
+ "T_population": "target modules with >= 4 s single-file CPU, stratified by the share of declaration seconds in machine runs: Rs = Span/sx_run modules, Ri = IW/#ix_seg/sym_run modules, W = WP-dominated; random.Random(20261002).sample(sorted(stratum),k)"
+}
