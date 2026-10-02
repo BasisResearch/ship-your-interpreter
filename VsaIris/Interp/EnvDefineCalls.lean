@@ -294,20 +294,18 @@ theorem wp_call_reallocNull (hlive : AllocLive live)
         heapRes vsaLayoutP vsaRoomB (ρ.plus c) H))
     (Q := fun _ => iprop(∃ p', VsaIris.a0 ↦ᵣ p' ∗ VsaIris.sp ↦ᵣ R 2 ∗ clobbered vsaClob ∗
         savedOwn (savedOf R) ∗ stackScratch (R 2) allocHeadroom ∗ mallocRes ρ H (R 11).toNat p'))
-  · iintro ⟨Ha0, Hsp, Hcl, Hsv, #Hgp, Hstk, Hh⟩
+  · unfold clobberedArg regsOf
+    iintro ⟨Ha0, Hsp, Hcl, Hsv, #Hgp, Hstk, Hh⟩
     rw [h10]
     iframe Ha0 Hsp Hgp Hsv Hstk Hh
     isplitr; ipureintro; exact ⟨hsp, hi4⟩
-    unfold clobberedArg
     iexists R
-    unfold regsOf
     iframe Hcl
     ipureintro; rfl
   · iintro ⟨%p', Ha0, Hsp, Hcl, Hsv, Hstk, Hres⟩
     iexists p'
     iframe Ha0 Hsp Hcl Hsv Hstk Hres
-  isplitl []; iexact Hi; isplitl []; iexact Hs
-  iframe Hpc HR Hgp Hstk Hh
+  iframe Hi Hs Hpc HR Hgp Hstk Hh
   iintro %R' %p' %hR' Hpc HR ⟨Hstk, Hres⟩
   iapply Hk $$ %R' %p' %hR' Hpc HR Hstk Hres
 

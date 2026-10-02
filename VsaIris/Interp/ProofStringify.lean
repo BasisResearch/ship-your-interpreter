@@ -1146,25 +1146,13 @@ theorem sg_filled (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       (∃ img, ownImg (InExt (s.toNat - 96, 64)) img ∗ ⌜CStrImg img (s.toNat - 96) x⌝) ⊢ Wp.W Φ := by
   have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
   unfold stringifyNeed snprintfNeed at hs1
-  have hsl : ∀ k, (sgFnb s p k ∨ InExt (s.toNat - 96, 64) k) ↔ sgF s p k := fun k => by
-    constructor
-    · rintro (⟨h, _⟩ | h)
-      · exact h
-      · exact .inl (by simp only [InExt] at h ⊢; omega)
-    · intro h; by_cases h' : InExt (s.toNat - 96, 64) k
-      · exact .inr h'
-      · exact .inl ⟨h, h'⟩
+  have hsl : ∀ k, (sgFnb s p k ∨ InExt (s.toNat - 96, 64) k) ↔ sgF s p k := fun k =>
+    ⟨(·.elim (·.1) fun h => .inl (by simp only [InExt] at h ⊢; omega)),
+      fun h => (Classical.em _).elim .inr (.inl ⟨h, ·⟩)⟩
   iintro ⟨Hrest, Hms, ⟨%img, HB, %hx⟩⟩
   ihave ⟨%Mi, HB, %hMi⟩ := ownSet_trackedAt _ img $$ HB
   ihave ⟨%M1, Hms, %⟨h1a, h1b, -⟩⟩ := ms_join $$ [$]
   ihave Hms := ms_iff hsl $$ Hms
-  have hoff := sg_offs (s := s) (by omega)
-  have hld : ∀ o, 16 ≤ o → o + 8 ≤ 112 → (o + 8 ≤ 16 ∨ 80 ≤ o) →
-      ldv .ld M1 (s + 18446744073709551504#64 + BitVec.ofNat 64 o).toNat =
-      ldv .ld M (s + 18446744073709551504#64 + BitVec.ofNat 64 o).toNat := fun o h1 h2 h3 => by
-    rw [hoff o (by omega)]
-    exact ldv_agree fun j hj => h1a _ ⟨.inl (by simp only [InExt]; omega),
-      by simp only [InExt]; omega⟩
   iapply sg_run Wp (F := SgRest Wp Φ N inp p s r v x ρ H c o rv Mp)
   rotate_left
   · iframe Hrest Hms
@@ -1178,26 +1166,18 @@ theorem sg_filled (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     apply swp_closeF
     dsimp only [F']
     refine sg_tail Wp A HN cx hmc hc ⟨by rw [h10, f.h9], by rw [h' 9 (by decide) (by decide), f.h9],
-      by rw [h' 2 (by decide) (by decide), f.h2], fun y hy hc' hy2 hy9 => ?_,
-      by rw [hld 104 (by omega) (by omega) (by omega)]; exact f.sra,
-      by rw [hld 96 (by omega) (by omega) (by omega)]; exact f.ss0,
-      by rw [hld 88 (by omega) (by omega) (by omega)]; exact f.ss1,
-      fun k hk => ?_, ?_, hlen⟩
-    · have hy10 : y ≠ 10 := fun e => hc' (by rw [e]; decide)
-      have hy1 : y ≠ 1 := fun e => by subst e; revert hy; decide
-      rw [h' y hy10 hy1]; exact f.hk y hy hc' hy2 hy9
-    · have hn := cx.hdsp k
-      rw [h1a k ⟨.inr hk, fun h => hn (by simp only [InExt] at h ⊢; omega) hk⟩]
-      exact f.hslot k hk
+      by rw [h' 2 (by decide) (by decide), f.h2], fun y hy hc' hy2 hy9 =>
+      (h' y (fun e => hc' (by rw [e]; decide)) (by rintro rfl; revert hy; decide)).trans
+        (f.hk y hy hc' hy2 hy9), ?_, ?_, ?_, fun k hk => (h1a k ⟨.inr hk, fun h =>
+        cx.hdsp k (by simp only [InExt] at h ⊢; omega) hk⟩).trans (f.hslot k hk), ?_, hlen⟩
+    iterate 3 rd_back [ldv_win _ h1a, f.sra, f.ss0, f.ss1] using [sgFnb, sgF]
     · exact cstrImg_congr hx fun i hi => by
         rw [h1b _ (by simp only [InExt]; omega)]; exact hMi _ (by simp only [InExt]; omega)
-  rcases hpc with rfl | rfl | rfl
-  · exact sg_back cx.hlive f.h2 gl.1 hs2 hs3 gl.2.1 gl.2.2.1 gl.2.2.2 fun _ =>
-      kont _ (by ix_reg) (fun y h10 h1 => by simp [upd, h10, h1])
-  · exact sg_backInt cx.hlive f.h2 gl.1 hs2 hs3 gl.2.1 gl.2.2.1 gl.2.2.2 fun _ =>
-      kont _ (by ix_reg) (fun y h10 h1 => by simp [upd, h10, h1])
-  · exact sg_backFn cx.hlive f.h2 gl.1 hs2 hs3 gl.2.1 gl.2.2.1 gl.2.2.2 fun _ =>
-      kont _ (by ix_reg) (fun y h10 h1 => by simp [upd, h10, h1])
+  rcases hpc with rfl | rfl | rfl <;> first
+    | refine sg_back cx.hlive f.h2 gl.1 hs2 hs3 gl.2.1 gl.2.2.1 gl.2.2.2 ?_
+    | refine sg_backInt cx.hlive f.h2 gl.1 hs2 hs3 gl.2.1 gl.2.2.1 gl.2.2.2 ?_
+    | refine sg_backFn cx.hlive f.h2 gl.1 hs2 hs3 gl.2.1 gl.2.2.1 gl.2.2.2 ?_
+  all_goals exact fun _ => kont _ (by ix_reg) (fun y h10 h1 => by simp [upd, h10, h1])
 
 theorem sg_strcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {inp : Nat} {p s r : BitVec 64} {v : Value} {x : String} {ρ : Regime}
