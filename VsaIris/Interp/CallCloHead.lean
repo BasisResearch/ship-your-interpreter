@@ -196,7 +196,8 @@ open VsaIris.Inst Vsa.RuntimeRepr
     rw [imgLE_congr (n := 4) (img' := imgM (writeLog M3 [((inp + 8#64).toNat,
         4, BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 dep + 1#64)))]))
       (fun i hi => by
-        rd_back [hMt4, hMt3, hoff]),
+        rw [hMt4, imgM_store_miss _ _ (by omega), hMt3,
+          imgM_store_miss _ _ (by rw [hoff 1048 (by decide)]; omega)]),
       hi8, imgLE_store4_hit, hv]
   have hhd : CloHd R4 Mt4 Mt s aX sret inp ret (BitVec.ofNat 64 e) (BitVec.ofNat 64 q) vl rv argc dep := by
     refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ⟨?_, ?_, ?_, ?_⟩, h1048, h1032, h1016, hsp0, hdepth, ?_⟩
@@ -317,7 +318,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
     rw [imgLE_congr (n := 4) (img' := imgM (writeLog M3 [((inp + 8#64).toNat,
         4, BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 dep + 1#64)))]))
       (fun i hi => by
-        rd_back [hMt3, hoff]),
+        rw [hMt3, imgM_store_miss _ _ (by rw [hoff 1048 (by decide)]; omega)]),
       hi8, imgLE_store4_hit, hv]
   have hdp : CloDp R3 Mt3 s aX sret inp ret vl rv dep := by
     refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ⟨?_, ?_, ?_, ?_⟩, h1048, h1032, ?_, hdepth⟩
