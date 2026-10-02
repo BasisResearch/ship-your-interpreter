@@ -356,9 +356,9 @@ were over +10% and +0.2 s in the two-round sweep; re-timed five rounds interleav
 −5%…+6%, ≤ 0.06 s); the earlier ProofEnvNew regression is gone (3.10 → 3.01 s).
 
 **Lines** (secondary): scope non-blank lines 114,965 → 116,710 (+1,745, +1.5%; plus `Vsa/OmegaHint.lean`
-161 lines outside the three directories); `git diff --shortstat e0981ae6` over Vsa/ and VsaIris/: 38
-files, +2,535 / −438. Setup is RegionTac 1,023 (433 moved from Region), Dbm 721, SimpGuard 264,
-OmegaHint 161, RegionCore +62; proof files changed: ValueSpec, HeapTake, ReallocCopy, Setjmp (byte
+144 lines outside the three directories); `git diff --shortstat e0981ae6` over Vsa/ and VsaIris/: 38
+files, +2,535 / −438. Setup (non-blank lines) is RegionTac 957 (about 400 of them moved from
+Region), Dbm 645, SimpGuard 238, SimpSets 16, OmegaHint 144, RegionCore +62; proof files changed: ValueSpec, HeapTake, ReallocCopy, Setjmp (byte
 lanes, +84 / −48); every other change is in tactic code.
 
 **Axioms** (the 14-line file): 12 theorems `[propext, Classical.choice, Quot.sound]`, the two WhileLogic
