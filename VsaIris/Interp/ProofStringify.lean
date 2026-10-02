@@ -18,10 +18,6 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions
 abbrev sgF (s p : BitVec 64) (k : Nat) : Prop :=
   InExt (s.toNat - 112, 112) k ∨ InExt (p.toNat, 24) k
 
-macro_rules
-  | `(tactic| sx_side) =>
-    `(tactic| (intro b hb; simp only [mem_accAddrs_iff, sgF, VsaIris.InExt] at *; sx_addr))
-
 #ix_seg sg_null {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
     {s p r : BitVec 64}

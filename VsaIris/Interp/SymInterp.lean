@@ -1018,3 +1018,9 @@ elab "with_geom " t:tacticSeq : tactic => do
   setGoals (← gs.mapM fun g => hs.foldrM (fun h g => (g.clear h) <|> pure g) g)
 
 end VsaIris.SymExec.Interp
+
+namespace VsaIris.Sym
+
+macro_rules | `(tactic| sx_side) => `(tactic| foot_key)
+
+end VsaIris.Sym

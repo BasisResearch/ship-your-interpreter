@@ -83,10 +83,6 @@ theorem seqz_sub (x y : BitVec 64) :
 abbrev veqS (pa pb s : BitVec 64) (x : Nat) : Prop :=
   (InExt (pa.toNat, 24) x ∨ InExt (pb.toNat, 24) x) ∨ InExt (s.toNat - 16, 16) x
 
-macro_rules
-  | `(tactic| sx_side) =>
-    `(tactic| (intro b hb; simp only [mem_accAddrs_iff, veqS, VsaIris.InExt] at *; sx_addr))
-
 theorem veq_close (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {pa pb s r : BitVec 64} {a b : Value} {st : Store} {B : List (Nat × Nat)}
     {rv R : Nat → BitVec 64} {M Ma Mb : Mem}

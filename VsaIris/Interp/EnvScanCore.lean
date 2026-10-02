@@ -41,10 +41,6 @@ def baseS (s out : Nat) (a : Nat) : Prop := (s - 64 ≤ a ∧ a < s) ∨ (out �
 
 def getS (s out : Nat) (G : FrameGeom) (a : Nat) : Prop := baseS s out a ∨ frameS G a
 
-macro_rules
-  | `(tactic| sx_side) =>
-    `(tactic| (intro b hb; have hb' := of_mem_accAddrs hb; simp only [InExt, frameS, getS, baseS, htifLo] at *; sx_addr))
-
 structure GetEntry (s : Nat) (r : BitVec 64) (sv : Nat → BitVec 64) (R : Nat → BitVec 64) :
     Prop where
   env : R 10 ≠ 0#64

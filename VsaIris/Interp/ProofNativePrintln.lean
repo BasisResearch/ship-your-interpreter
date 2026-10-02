@@ -12,10 +12,6 @@ abbrev nplF (s : BitVec 64) (k : Nat) : Prop := InExt (s.toNat - 24, 24) k
 
 abbrev nplS (s : BitVec 64) (k : Nat) : Prop := nplF s k ∨ ioW k
 
-macro_rules
-  | `(tactic| sx_side) =>
-    `(tactic| (intro b hb; simp only [mem_accAddrs_iff, nplS, nplF, ioW, VsaIris.InExt] at *; sx_addr))
-
 #ix_seg npl_pro {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {rv : Nat → BitVec 64}
     {s r : BitVec 64} (h2 : rv 2 = s)
