@@ -13,13 +13,3 @@ theorem frameS_iff (G : FrameGeom) (a : Nat) : frameS G a ↔ BlocksCover G.bloc
 
 end VsaIris.Interp
 
-namespace VsaIris.Sym
-
-macro_rules
-  | `(tactic| sx_side) => `(tactic| (simp only [VsaIris.Interp.htifLo] at *; sx_addr))
-
-macro_rules
-  | `(tactic| sx_side) =>
-    `(tactic| (intro b hb; have hb' := of_mem_accAddrs hb; simp only [InExt, VsaIris.Interp.frameS, VsaIris.Interp.htifLo] at *; sx_addr))
-
-end VsaIris.Sym
