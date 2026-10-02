@@ -68,6 +68,7 @@ partial def footPrep (fuel : Nat) (e : Expr) : MetaM (Option Expr) := do
     let ty := e.getArg! 0
     unless ty.isConstOf ``Nat do return none
     return some (← footClean e)
+  if e.isApp && e.getAppFn.isFVar then return some e
   if fuel == 0 then return none
   let .const _ _ := e.getAppFn | return none
   let some e' ← unfoldDefinition? e | return none
@@ -203,17 +204,49 @@ def footHyp (fc : FootCtx) (e : Expr) : Option Expr := Id.run do
     if d.2 == e then return some d.1
   return none
 
+/-- The premises of a hypothesis `∀ x, P₁ x → … → Pₙ x → C x` at `t`, when its conclusion
+is `e` (`= C t`). -/
+def footPremsOf (ty t e : Expr) : Option (Array Expr) := Id.run do
+  let .forallE _ _ body _ := ty | return none
+  let mut b := body.instantiate1 t
+  let mut ps := #[]
+  while b.isForall do
+    if b.bindingBody!.hasLooseBVar 0 then return none
+    ps := ps.push b.bindingDomain!
+    b := b.bindingBody!.lowerLooseBVars 1 1
+  if ps.isEmpty || b != e then return none
+  return some ps
+
+mutual
+/-- A leaf `S t` closed by a hypothesis `∀ x, P₁ x → … → Pₙ x → S x` (a local chart
+`lo ≤ x → x < hi`, or a disjunction of charts) whose premises are decided at `t`. -/
+partial def footPrem (fc : FootCtx) (e : Expr) : MetaM (Option Expr) := do
+  unless e.isApp && e.getAppFn.isFVar do return none
+  let t := e.appArg!
+  for (h, ty) in fc.hyps do
+    let .forallE _ dom _ _ := ty | continue
+    unless dom.isConstOf ``Nat do continue
+    let some ps := footPremsOf ty t e | continue
+    let mut pfs := #[t]
+    for p in ps do
+      let some p' ← footPrep 6 p | break
+      let some q ← footDec fc p' false | break
+      unless p' == p || (← isDefEq p' p) do break
+      pfs := pfs.push q
+    if pfs.size == ps.size + 1 then return some (mkAppN h pfs)
+  return none
+
 /-- Decide a prepared goal tree. -/
-partial def footDec (fc : FootCtx) (e : Expr) : MetaM (Option Expr) := do
+partial def footDec (fc : FootCtx) (e : Expr) (prem : Bool := true) : MetaM (Option Expr) := do
   if e.isAppOfArity ``Or 2 then
     let a := e.appFn!.appArg!; let b := e.appArg!
-    if let some p ← footDec fc a then return some (mkApp3 (mkConst ``Or.inl) a b p)
-    if let some q ← footDec fc b then return some (mkApp3 (mkConst ``Or.inr) a b q)
+    if let some p ← footDec fc a prem then return some (mkApp3 (mkConst ``Or.inl) a b p)
+    if let some q ← footDec fc b prem then return some (mkApp3 (mkConst ``Or.inr) a b q)
     return none
   if e.isAppOfArity ``And 2 then
     let a := e.appFn!.appArg!; let b := e.appArg!
-    let some p ← footDec fc a | return none
-    let some q ← footDec fc b | return none
+    let some p ← footDec fc a prem | return none
+    let some q ← footDec fc b prem | return none
     return some (mkApp4 (mkConst ``And.intro) a b p q)
   let nc := fc.nc
   if e.isAppOfArity ``Eq 3 then
@@ -237,9 +270,12 @@ partial def footDec (fc : FootCtx) (e : Expr) : MetaM (Option Expr) := do
     if tx == ty && cx != cy then
       return some (mkAppN (mkConst ``key_ne) #[x, y, tx, mkNatLit cx, mkNatLit cy, px, py, boolRefl false])
     return footHyp fc e
-  let some (g, lt) ← relNF nc e | return footHyp fc e
+  let some (g, lt) ← relNF nc e | do
+    if let some p := footHyp fc e then return some p
+    if prem then footPrem fc e else return none
   let some p := footLe fc g | return footHyp fc e
   return some (if lt then mkApp3 (mkConst ``lt_of_le1) (e.getArg! 2) (e.getArg! 3) p else p)
+end
 
 /-- The access form `∀ b, b ∈ accAddrs a w → P b`: `(a, w, P)`. -/
 def footAcc? (tgt : Expr) : Option (Expr × Expr × Expr) := do
