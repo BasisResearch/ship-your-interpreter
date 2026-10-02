@@ -35,10 +35,6 @@ abbrev npF (s args : BitVec 64) (n : Nat) (k : Nat) : Prop :=
 
 abbrev npS (s args : BitVec 64) (n : Nat) (k : Nat) : Prop := npF s args n k ∨ ioW k
 
-macro_rules
-  | `(tactic| sx_side) =>
-    `(tactic| (intro b hb; simp only [mem_accAddrs_iff, npS, npF, ioW, VsaIris.InExt] at *; sx_addr))
-
 section Vals
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]

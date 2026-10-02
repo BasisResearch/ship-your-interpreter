@@ -31,6 +31,12 @@ theorem dif_dropL {x y X Y T t r t2 a b c d : Nat} (h : x ≤ y) (px : x = T + a
 theorem dif_dropR {x y X Y t1 s r S a b c d : Nat} (h : x ≤ y) (px : x = t1 + a) (py : y = s + b)
     (hs : s + r = S) (pX : X = t1 + c) (pY : Y = S + d) (hc : Nat.ble (c + b) (a + d) = true) :
     X ≤ Y := by rw [Nat.ble_eq] at hc; omega
+theorem dif_lift {x y t s r T S a b : Nat} (h : x ≤ y) (px : x = t + a) (py : y = s + b)
+    (hT : t + r = T) (hS : s + r = S) : T + a ≤ S + b := by subst px py hT hS; omega
+theorem dif_scale {x y : Nat} (k : Nat) (h : x ≤ y) : k * x ≤ k * y := Nat.mul_le_mul_left k h
+theorem foot_mem_acc {a w b : Nat} (h : a ≤ b ∧ b < a + w) : b ∈ accAddrs a w := by
+  have e : a + (b - a) = b := by omega
+  rw [← e]; exact mem_accAddrs (by omega)
 theorem al_key {x t c w : Nat} (px : x = t + c) (ht : t % w = 0) (hc : (c % w == 0) = true) :
     x % w = 0 := by
   simp only [beq_iff_eq] at hc; subst px; rw [Nat.add_mod, ht, hc, Nat.zero_add, Nat.zero_mod]
@@ -69,6 +75,7 @@ partial def footPrep (fuel : Nat) (e : Expr) : MetaM (Option Expr) := do
     unless ty.isConstOf ``Nat do return none
     return some (← footClean e)
   if e.isApp && e.getAppFn.isFVar then return some e
+  if e.isAppOfArity ``Membership.mem 5 && (e.getArg! 1).isAppOfArity ``List 1 then return some e
   if fuel == 0 then return none
   let .const _ _ := e.getAppFn | return none
   let some e' ← unfoldDefinition? e | return none
@@ -98,7 +105,39 @@ structure FootCtx where
 /-- Facts: the comparisons of the context (conjunctions split) and `extra`; wrap-around
 removed by ceilings (direct or through one atom). No `BitVec` register equations: a route
 stronger than the `omega` it precedes would change which goals a run leaves to the proof. -/
-def footFacts (extra : Array (Expr × Expr)) : MetaM FootCtx := do
+def mkNatMul (k t : Expr) : Expr :=
+  mkApp2 (mkApp4 (mkConst ``HMul.hMul [0, 0, 0]) (mkConst ``Nat) (mkConst ``Nat) (mkConst ``Nat)
+    (mkApp2 (mkConst ``instHMul [0]) (mkConst ``Nat) (mkConst ``instMulNat))) k t
+
+/-- The literal multipliers of the goal: `k * x` with `k` a literal, as `(k, x)`. -/
+partial def goalMuls (e : Expr) (out : Array (Nat × Expr) := #[]) : Array (Nat × Expr) :=
+  match e with
+  | .app f a =>
+    let out := if e.isAppOfArity ``HMul.hMul 6 && (e.getArg! 0).isConstOf ``Nat then
+        match (e.getArg! 4).nat? with
+        | some k => if k ≤ 1 || out.contains (k, a) then out else out.push (k, a)
+        | none => out
+      else out
+    goalMuls a (goalMuls f out)
+  | .lam _ t b _ | .forallE _ t b _ => goalMuls b (goalMuls t out)
+  | .mdata _ b => goalMuls b out
+  | _ => out
+
+/-- `k * f`: a fact over single atoms scaled by a literal multiplier of the goal. -/
+def scaleRec (k : Nat) (f : DRec) : Option DRec := do
+  if isNatAdd f.t1 || isNatAdd f.t2 then none
+  let K := mkNatLit k
+  let side (x t : Expr) (c : Nat) (px : Expr) : Expr × Expr :=
+    if isZeroLit t then (t, mkAppN (mkConst ``lin_mul0) #[x, mkNatLit c, K, mkNatLit (k * c), px,
+      natRefl (k * c)])
+    else (mkNatMul K t, mkAppN (mkConst ``lin_mul) #[x, t, mkNatLit c, K, mkNatLit (k * c), px,
+      natRefl (k * c)])
+  let (t1, px) := side f.lhs f.t1 f.a f.px
+  let (t2, py) := side f.rhs f.t2 f.b f.py
+  some { lhs := mkNatMul K f.lhs, rhs := mkNatMul K f.rhs, t1, a := k * f.a, px, t2, b := k * f.b, py,
+         h := mkAppN (mkConst ``dif_scale) #[f.lhs, f.rhs, K, f.h] }
+
+def footFacts (extra : Array (Expr × Expr)) (goal : Expr := mkConst ``True) : MetaM FootCtx := do
   let mut kf ← keyFacts
   let mut raw : Array (Expr × Expr) := #[]
   let mut hyps : Array (Expr × Expr) := #[]
@@ -150,6 +189,14 @@ def footFacts (extra : Array (Expr × Expr)) : MetaM FootCtx := do
   for (ty, h) in redo do
     if let some r ← footRel nc ty h then
       unless hasMod r.t1 || hasMod r.t2 do facts := facts.push r
+  let muls := extra.foldl (fun acc (t, _) => goalMuls t acc) (goalMuls goal)
+  if !muls.isEmpty then
+    let mut sc := #[]
+    for f in facts do
+      for (k, x) in muls do
+        if f.t1 == x || f.t2 == x then
+          if let some r := scaleRec k f then sc := sc.push r
+    facts := facts ++ sc
   return { nc, facts, hyps }
 
 /-- `big = small ⊕ r` as sums of atoms: `(r, small + r = big)`. -/
@@ -159,6 +206,16 @@ def splitSum (big small : Expr) : Option (Expr × Expr) :=
   else match subAtoms big small with
     | some r => let (sm, h) := addAtoms small r; if sm == big then some (r, h) else none
     | none => none
+
+/-- `f` with a common sum of atoms `r` added to both sides, so its keys become `T`, `S`. -/
+def liftTo (f : DRec) (T S : Expr) : Option DRec := do
+  let (r1, hT) ← splitSum T f.t1
+  let (r2, hS) ← splitSum S f.t2
+  unless r1 == r2 do none
+  let lhs := mkNatAdd T (mkNatLit f.a); let rhs := mkNatAdd S (mkNatLit f.b)
+  some (DRec.mk lhs rhs T f.a (nrefl lhs) S f.b (nrefl rhs)
+    (mkAppN (mkConst ``dif_lift) #[f.lhs, f.rhs, f.t1, f.t2, r1, T, S, mkNatLit f.a, mkNatLit f.b,
+      f.h, f.px, f.py, hT, hS]))
 
 /-- `lhs ≤ rhs` (keys `g`) from the facts: same atom, literal below atom, one fact, two facts. -/
 def footLe (fc : FootCtx) (g : DRec) : Option Expr := Id.run do
@@ -185,10 +242,19 @@ def footLe (fc : FootCtx) (g : DRec) : Option Expr := Id.run do
         return some (mkAppN (mkConst ``dif_dropR) #[f.lhs, f.rhs, g.lhs, g.rhs, f.t1, f.t2, r, g.t2,
           mkNatLit f.a, mkNatLit f.b, mkNatLit g.a, mkNatLit g.b, f.h, f.px, f.py, hs, g.px, g.py,
           trueRefl])
+  -- one fact with a common sum of atoms added to both sides
+  for f in fc.facts do
+    unless g.a + f.b ≤ f.a + g.b && (f.t1 != g.t1 || f.t2 != g.t2) do continue
+    if let some c := liftTo f g.t1 g.t2 then
+      if let some p := difImp c c.h g then return some p
   for f1 in fc.facts do
     unless f1.t1 == g.t1 do continue
-    for f2 in fc.facts do
-      unless f2.t1 == f1.t2 && f2.t2 == g.t2 do continue
+    for f2' in fc.facts do
+      let f2 ← if f2'.t1 == f1.t2 && f2'.t2 == g.t2 then pure f2'
+        else if isZeroLit f1.t2 || isZeroLit g.t2 then continue
+        else match liftTo f2' f1.t2 g.t2 with
+          | some c => pure c
+          | none => continue
       let A := f1.a + f2.a; let B := f1.b + f2.b
       let lhs := mkNatAdd g.t1 (mkNatLit A); let rhs := mkNatAdd g.t2 (mkNatLit B)
       let h := mkAppN (mkConst ``dif_chain) #[f1.lhs, f1.rhs, f2.lhs, f2.rhs, f1.t1, f1.t2, f2.t2,
@@ -249,6 +315,7 @@ partial def footDec (fc : FootCtx) (e : Expr) (prem : Bool := true) : MetaM (Opt
     let some q ← footDec fc b prem | return none
     return some (mkApp4 (mkConst ``And.intro) a b p q)
   let nc := fc.nc
+  if e.isAppOfArity ``Membership.mem 5 then return ← footMem fc e prem 4
   if e.isAppOfArity ``Eq 3 then
     let x := e.getArg! 1; let y := e.getArg! 2
     if x.isAppOfArity ``HMod.hMod 6 && isZeroLit y then
@@ -275,6 +342,27 @@ partial def footDec (fc : FootCtx) (e : Expr) (prem : Bool := true) : MetaM (Opt
     if prem then footPrem fc e else return none
   let some p := footLe fc g | return footHyp fc e
   return some (if lt then mkApp3 (mkConst ``lt_of_le1) (e.getArg! 2) (e.getArg! 3) p else p)
+/-- A leaf `b ∈ L` of a list built from `accAddrs`, `++` and definitions. -/
+partial def footMem (fc : FootCtx) (e : Expr) (prem : Bool) (fuel : Nat) : MetaM (Option Expr) := do
+  let L := (e.getArg! 3).consumeMData; let b := e.getArg! 4
+  let nat := mkConst ``Nat
+  if L.isAppOfArity ``accAddrs 2 then
+    let a := L.getArg! 0; let w := L.getArg! 1
+    let lo := mkApp4 (mkConst ``LE.le [Level.zero]) nat (mkConst ``instLENat) a b
+    let hi := mkApp4 (mkConst ``LT.lt [Level.zero]) nat (mkConst ``instLTNat) b (mkNatAdd a w)
+    let some p ← footDec fc (mkAnd lo hi) prem | return none
+    return some (mkAppN (mkConst ``foot_mem_acc) #[a, w, b, p])
+  if L.isAppOfArity ``HAppend.hAppend 6 then
+    let l1 := L.getArg! 4; let l2 := L.getArg! 5
+    if let some p ← footMem fc (← mkAppM ``Membership.mem #[l1, b]) prem fuel then
+      return some (← mkAppM ``List.mem_append_left #[l2, p])
+    if let some p ← footMem fc (← mkAppM ``Membership.mem #[l2, b]) prem fuel then
+      return some (← mkAppM ``List.mem_append_right #[l1, p])
+    return none
+  if fuel == 0 then return none
+  let .const _ _ := L.getAppFn | return footHyp fc e
+  let some L' ← unfoldDefinition? L | return footHyp fc e
+  footMem fc (mkAppN e.getAppFn ((e.getAppArgs).set! 3 L')) prem (fuel - 1)
 end
 
 /-- The access form `∀ b, b ∈ accAddrs a w → P b`: `(a, w, P)`. -/
@@ -299,7 +387,7 @@ def footKey (g : MVarId) : MetaM Bool := g.withContext do
       let hi := mkApp4 (mkConst ``LT.lt [Level.zero]) nat (mkConst ``instLTNat) b (mkNatAdd a w)
       withLocalDeclD `h1 lo fun h1 => withLocalDeclD `h2 hi fun h2 => do
         let some e ← footPrep 6 (P.beta #[b]) | return none
-        let fc ← footFacts #[(lo, h1), (hi, h2)]
+        let fc ← footFacts #[(lo, h1), (hi, h2)] e
         let some p ← footDec fc e | return none
         unless ← isDefEq e (P.beta #[b]) do return none
         return some (← mkLambdaFVars #[b, h1, h2] p)
@@ -309,7 +397,7 @@ def footKey (g : MVarId) : MetaM Bool := g.withContext do
     g.assign pf
     return true
   let some e ← footPrep 6 tgt | return false
-  let fc ← footFacts #[]
+  let fc ← footFacts #[] e
   let some p ← footDec fc e | return false
   unless ← isDefEq e tgt do return false
   g.assign p
