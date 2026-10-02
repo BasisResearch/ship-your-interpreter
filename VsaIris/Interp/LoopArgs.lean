@@ -10,25 +10,18 @@ abbrev argsView (a arr argc : Nat) : List Nat := accAddrs (a + 16) 8 ++ accAddrs
 
 #ix_seg ArgsLoop_runA {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
-    {aX s arr pA : BitVec 64} {idx argc : Nat}
-    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
-    (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
-    (hx1 : 0x80000000 ≤ aX.toNat) (hx2 : aX.toNat + 24 ≤ 0x100000000)
-    (hx3 : aX.toNat + 24 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aX.toNat)
-    (ha1 : 0x80000000 ≤ arr.toNat) (ha2 : arr.toNat + 8 * argc ≤ 0x100000000)
-    (ha3 : arr.toNat + 8 * argc ≤ tohostAddr ∨ tohostAddr + 16 ≤ arr.toNat)
+    {aX s arr pA : BitVec 64} {idx argc : Nat} (hfg : EvalFrameG s) (hx : RamWin aX.toNat 24)
+    (ha : RamWin arr.toNat (8 * argc))
     (hidx : idx < argc) (hc : argc ≤ 32)
     (h8 : R 8 = aX) (h16 : R 16 = BitVec.ofNat 64 idx) (h2 : R 2 = s + 18446744073709550528#64)
     (harr : ldv .ld m (aX + 16#64).toNat = arr)
     (hel : ldv .ld m (arr + BitVec.ofNat 64 idx <<< 3).toNat = pA) :
     IW live m (argsView aX.toNat arr.toNat argc) (InExt (s.toNat - 1088, 1088)) Q 0x800031dc#64 R Mt
-  by sym_run hlive using [h8, h16, h2, harr, hel, hsf] at 0x80003220
+  by with_geom sym_run hlive using [h8, h16, h2, harr, hel, hfg.sf] at 0x80003220
 
 #ix_seg ArgsLoop_runB {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
-    {s slotA : BitVec 64} {q : Nat}
-    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
-    (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    {s slotA : BitVec 64} {q : Nat} (hfg : EvalFrameG s)
     (h2 : R 2 = s + 18446744073709550528#64)
     (hA : ldv .ld Mt (s.toNat - 1088) = slotA)
     (hq0 : (slotA + LeanRV64DExecutable.Functions.sign_extend 3328#12).toNat = q)
@@ -36,7 +29,7 @@ abbrev argsView (a arr argc : Nat) : List Nat := accAddrs (a + 16) 8 ++ accAddrs
     (hq16 : (slotA + LeanRV64DExecutable.Functions.sign_extend 3344#12).toNat = q + 16)
     (hq1 : s.toNat - 1088 + 240 ≤ q) (hq2 : q + 24 ≤ s.toNat - 1088 + 1008) (hq3 : q % 8 = 0) :
     IW live m [] (InExt (s.toNat - 1088, 1088)) Q 0x80003224#64 R Mt
-  by sym_run hlive using [h2, hA, hsf, hq0, hq8, hq16] at 0x800031dc 0x80003254
+  by with_geom sym_run hlive using [h2, hA, hfg.sf, hq0, hq8, hq16] at 0x800031dc 0x80003254
 
 theorem exprArray_get {m : Mem} {P : Nat → Prop} :
     ∀ {a n : Nat} {es : List Expr}, ExprArrayReprWithin m P a n es →
@@ -186,10 +179,7 @@ theorem evalSlot {s : BitVec 64} (h : EvalFrameG s) {o : Nat} (ho : o + 24 ≤ 1
   · rw [e]; omega
 
 theorem evalSP_off' {s : BitVec 64} (h : EvalFrameG s) (c : Nat) (hc : c < 4096) :
-    (s + 18446744073709550528#64 + BitVec.ofNat 64 c).toNat = s.toNat - 1088 + c := by
-  have h1 := h.sf; have h2 := h.lo; have h3 := h.hi
-  rw [BitVec.toNat_add, h1, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (a := c) (by omega)]
-  exact Nat.mod_eq_of_lt (by omega)
+    (s + 18446744073709550528#64 + BitVec.ofNat 64 c).toNat = s.toNat - 1088 + c := h.off c hc
 
 theorem sext32_ofNat_eq {a : Nat} (h : a < 2 ^ 31) :
     BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 a)) = BitVec.ofNat 64 a :=
@@ -268,8 +258,8 @@ theorem argsStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ in
   rotate_left
   · icombine Hro Hk as HX; isplitl []; iexact Hdv; iframe HX Hms
   intro F'
-  refine ArgsLoop_runA (pA := BitVec.ofNat 64 p) hlive hfg.sf hfg.lo hfg.hi hfg.al hn.lo hn.hi hn.off
-    hn.alo hn.ahi hn.aoff hidx hlen hh.s0 hh.a6 hh.sp hn.arrw hel ?_
+  refine ArgsLoop_runA (pA := BitVec.ofNat 64 p) hlive hfg ⟨hn.lo, hn.hi, hn.off⟩
+    ⟨hn.alo, hn.ahi, hn.aoff⟩ hidx hlen hh.s0 hh.a6 hh.sp hn.arrw hel ?_
   intros
   apply swp_closeRM
   intro R1 Mt1 hR1 hMt1
@@ -392,7 +382,7 @@ theorem argsCopy (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ int
   rotate_left
   · isplitl []; iexact Hdv; isplitr [Hms]; iexact Hk; iexact Hms
   intro F'
-  refine ArgsLoop_runB (q := argsBase s + 24 * idx) hlive hfg.sf hfg.lo hfg.hi hfg.al hsp hsl
+  refine ArgsLoop_runB (q := argsBase s + 24 * idx) hlive hfg hsp hsl
     (by rw [sign_extend_3328]; exact hsp1.a0) (by rw [sign_extend_3336]; exact hsp1.a8)
     (by rw [sign_extend_3344]; exact hsp1.a16) (by unfold argsBase; omega) (by unfold argsBase; omega)
     (by unfold argsBase; omega) ?_ ?_

@@ -17,14 +17,6 @@ theorem storeRepr_bodies (N : NativeAddrs) (st : Store) (B : List (Nat × Nat)) 
   iintro ⟨%mf, %mc, %Bs, -, -, %hp, -, -⟩
   ipureintro; exact hp.bodies
 
-theorem StackGeom.lowerE {s : BitVec 64} {n : Nat} (h : StackGeom s n) (hn : 1088 ≤ n)
-    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088) :
-    StackGeom (s + 18446744073709550528#64) (n - 1088) := by
-  have h1 := h.le; have h2 := h.lo; have h3 := h.hi; have h4 := h.al; have h5 := h.top
-  simp only [Vsa.Sim.LayoutInstance.stackSL] at h2 h3
-  refine ⟨by rw [hsf]; omega, ?_, ?_, ?_, ?_⟩ <;> rw [hsf] <;>
-    (try simp only [Vsa.Sim.LayoutInstance.stackSL]) <;> omega
-
 theorem envSp_eval {s : BitVec 64} (hfg : EvalFrameG s) {need : Nat} (h : need ≤ 4096) :
     EnvSp (s + 18446744073709550528#64) need := by
   have hsf := hfg.sf; have hs := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
@@ -214,7 +206,7 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
           world N vsaLayoutP vsaRoomB inp (.counted k) st' d -∗ PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗
           (twpW (vsaModel live)).W Φ)))
       hne List.drop_zero.symm hbn hch hfg
-      (hsg.lowerE (by have := hn1; omega) hsf) hall (cloSlotGeom hfg) hat.spills hinv
+      (hsg.lower (by have := hn1; omega)) hall (cloSlotGeom hfg) hat.spills hinv
     iframe Hms Hcode Hro Hnew2 Hst Hslot Hw
     iframe Hsr Hk
     iintro %R5 %Mt5 %⟨hk5, h10, hinv5⟩ ⟨Hsr, Hk⟩ Hms Hst Hret Hw
@@ -280,13 +272,7 @@ theorem callClosureT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
         sret v (.counted k) st' d ret
     ⊢ (twpW (vsaModel live)).W Φ := by
   have hge := evalNeed_call_ge f args d
-  have hs := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
-  unfold Vsa.Sim.LayoutInstance.stackSL at hs hs2
-  simp only at hs hs2
-  have hsF : s - 1088#64 = s + 18446744073709550528#64 := evalSP_eq s
-  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := by
-    rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
-  have hfg : EvalFrameG s := ⟨hsf, by omega, hs2, hs3⟩
+  have hfg := hsg.evalFrame (by omega); geom_open
   have hinpN : (BitVec.ofNat 64 inp).toNat = inp := Nat.mod_eq_of_lt hinpL
   iintro ⟨#Hcode, #Hast, #Hv, #Hav, Hms, Hst, Hw, Hsr, Hk⟩
 

@@ -39,8 +39,8 @@ theorem callSegA (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
       (∀ R1 Mt1, ⌜CallA R1 Mt1 s aX aF aE sret inp ret rv ∧ R1 1 = ret⌝ -∗
         ms 0x800031bc#64 R1 (InExt (s.toNat - 1088, 1088)) Mt1 -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
-  have hsf := hfg.sf; have hs' := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
-  have hoff := evalSP_off (s := s) hsf (by omega)
+  geom_open
+  have hoff := evalSP_off' hfg
   iintro ⟨#Hdv, Hms, Hk⟩
   iapply wp_swpF Wp (F := iprop(∀ R1 Mt1, ⌜CallA R1 Mt1 s aX aF aE sret inp ret rv ∧ R1 1 = ret⌝ -∗
         ms 0x800031bc#64 R1 (InExt (s.toNat - 1088, 1088)) Mt1 -∗ Wp.W Φ))
@@ -48,7 +48,7 @@ theorem callSegA (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   · iframe Hdv Hms; iexact Hk
   intro F'
   unfold evalEntryPC
-  refine Call_run1 hlive hsf hs' hs2 hs3 hn.lo hn.hi hn.off (by ix_reg; exact hregs.a0)
+  refine Call_run1 hlive hfg ⟨hn.lo, hn.hi, hn.off⟩ (by ix_reg; exact hregs.a0)
     (by ix_reg; exact hregs.a1) (by ix_reg; exact hregs.a2) (by ix_reg; exact hregs.a3)
     (by ix_reg; exact hregs.sp) hn.kind hn.kindu hn.callee ?_
   intros
@@ -84,8 +84,8 @@ theorem callSegB (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
        (∀ R2 Mt2, ⌜0 < argc ∧ argc ≤ 32 ∧ CallB R2 R1 Mt2 Mt1 s aE argc⌝ -∗
           ms 0x800031dc#64 R2 (InExt (s.toNat - 1088, 1088)) Mt2 -∗ Wp.W Φ))
     ⊢ Wp.W Φ := by
-  have hsf := hfg.sf; have hs' := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
-  have hoff := evalSP_off (s := s) hsf (by omega)
+  geom_open
+  have hoff := evalSP_off' hfg
   have hsmall := hn.small
   have hct : (BitVec.ofNat 64 argc).toInt = argc := ofNat_toInt_small hsmall
   have h32 : ((32#64 : BitVec 64).toInt : Int) = 32 := by decide
@@ -100,7 +100,7 @@ theorem callSegB (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   rotate_left
   · iframe Hdv Hms; iexact Hk
   intro F'
-  refine Call_run2 (aE := aE) hlive hsf hs' hs2 hs3 hn.lo hn.hi hn.off h8 h2 hn.cnt ?_ ?_ ?_ ?_
+  refine Call_run2 (aE := aE) hlive hfg ⟨hn.lo, hn.hi, hn.off⟩ h8 h2 hn.cnt ?_ ?_ ?_ ?_
   · exact hA
   · intro hc
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false] at hc
@@ -152,8 +152,7 @@ theorem CallAt.of_seg {R1 R1' R2 R : Nat → BitVec 64} {Mt1 Mt2 Mt : Mem}
     (hU : Untouched (InExt (s.toNat - 1088, 1088)) (argsW s) Mt2 Mt)
     (hk : ∀ x ∈ argsKeep, R x = R2 x) :
     CallAt R Mt s aX sret inp ret rv w0 w1 w2 argc := by
-  have hsf := hfg.sf
-  have hoff := evalSP_off (s := s) hsf (by have := hfg.hi; omega)
+  have hsf := hfg.sf; have hoff := evalSP_off' hfg
   have kr : ∀ x ∈ calleeSaved, R x = R1 x := fun x hx => by
     rw [hk x ((by decide : ∀ y ∈ calleeSaved, y ∈ argsKeep) x hx), hB.keep x hx, upd_apply,
       if_neg ((by decide : ∀ y ∈ calleeSaved, y ≠ 1) x hx), hkeep1 x hx]
@@ -184,13 +183,9 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
 
 #ix_seg Call_runTM {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
-    {aX s : BitVec 64}
-    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
-    (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
-    (hx1 : 0x80000000 ≤ aX.toNat) (hx2 : aX.toNat + 28 ≤ 0x100000000)
-    (hx3 : aX.toNat + 28 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aX.toNat)
+    {aX s : BitVec 64} (hfg : EvalFrameG s) (hx : RamWin aX.toNat 28)
     (h8 : R 8 = aX) (h2 : R 2 = s + 18446744073709550528#64) :
     IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003fb0#64 R Mt
-  by sym_run hlive using [h8, h2, hsf] at 0x80003fdc
+  by with_geom sym_run hlive using [h8, h2, hfg.sf] at 0x80003fdc
 
 end VsaIris.Interp

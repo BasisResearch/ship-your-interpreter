@@ -63,28 +63,20 @@ theorem callNode_of_repr {m : Mem} {P : Nat → Prop} {aX : BitVec 64} {f : Expr
 
 #ix_seg Call_run1 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
-    {aX s aE inp sret aF : BitVec 64}
-    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
-    (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
-    (hx1 : 0x80000000 ≤ aX.toNat) (hx2 : aX.toNat + 28 ≤ 0x100000000)
-    (hx3 : aX.toNat + 28 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aX.toNat)
+    {aX s aE inp sret aF : BitVec 64} (hfg : EvalFrameG s) (hx : RamWin aX.toNat 28)
     (h10 : R 10 = sret) (h11 : R 11 = inp) (h12 : R 12 = aX) (h13 : R 13 = aE) (h2 : R 2 = s)
     (hk9 : ldv .lw m aX.toNat = 9#64) (hk9u : ldv .lwu m aX.toNat = 9#64)
     (hcallee : ldv .ld m (aX + 8#64).toNat = aF) :
     IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003164#64 R Mt
-  by sym_run hlive using [h10, h11, h12, h13, h2, hk9, hk9u, hcallee, hsf] at 0x800031bc
+  by with_geom sym_run hlive using [h10, h11, h12, h13, h2, hk9, hk9u, hcallee, hfg.sf] at 0x800031bc
 
 #ix_seg Call_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
-    {aX s aE : BitVec 64} {argc : Nat}
-    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
-    (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
-    (hx1 : 0x80000000 ≤ aX.toNat) (hx2 : aX.toNat + 28 ≤ 0x100000000)
-    (hx3 : aX.toNat + 28 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aX.toNat)
+    {aX s aE : BitVec 64} {argc : Nat} (hfg : EvalFrameG s) (hx : RamWin aX.toNat 28)
     (h8 : R 8 = aX) (h2 : R 2 = s + 18446744073709550528#64)
     (hcnt : ldv .lw m (aX + 24#64).toNat = BitVec.ofNat 64 argc)
     (hA : ldv .ld Mt (s.toNat - 1088) = aE) :
     IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x800031c0#64 R Mt
-  by sym_run hlive using [h8, h2, hcnt, hA, hsf] at 0x800031dc 0x80003254 0x80003fb0
+  by with_geom sym_run hlive using [h8, h2, hcnt, hA, hfg.sf] at 0x800031dc 0x80003254 0x80003fb0
 
 end VsaIris.Interp

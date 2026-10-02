@@ -126,21 +126,15 @@ end Defs
   unfold valOf
   icases Hv with ⟨%⟨hk5, hw2⟩, -⟩
   have hw2' : w2 = entry := BitVec.eq_of_toNat_eq (hw2.trans hentry)
-  have hs := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
-  unfold Vsa.Sim.LayoutInstance.stackSL at hs hs2
-  simp only at hs hs2
-  have hs' : 0x87800000 + 1088 ≤ s.toNat := by omega
-  have hsF : s - 1088#64 = s + 18446744073709550528#64 := evalSP_eq s
-  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := by
-    rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
-  have hoff := evalSP_off (s := s) hsf (by omega)
+  have hfg := hsg.evalFrame (by omega); have hsf := hfg.sf; geom_open
+  have hoff := evalSP_off' hfg
   have hx1 := hnd.lo; have hx2 := hnd.hi; have hx3 := hnd.off
   ihave #Hdv := roOwn_data hnd.view $$ [$]
   iapply wp_swpF Wp
   rotate_left
   · icombine Hspec Hcode Hro Hav Hst Hw Hslot Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
-  refine CallN_run1 (w0 := w0) (w1 := w1) (w2 := w2) hlive hsf hs' hs2 hs3 hx1 hx2 hx3 hcall.s0
+  refine CallN_run1 (w0 := w0) (w1 := w1) (w2 := w2) hlive hfg ⟨hx1, hx2, hx3⟩ hcall.s0
     hcall.sp ?_ ?_ ?_ ?_ ?_
   · rw [hoff 96 (by decide)]; exact hcall.w0
   · rw [hoff 104 (by decide)]; exact hcall.w1
@@ -198,7 +192,7 @@ end Defs
     unfold stackAt
     iframe Hst
     ipureintro
-    exact (stackGeom_evalSP hsg hn hsf).narrow (by omega)
+    exact (hsg.lower hn).narrow (by omega)
   iintro %R2 %hkeep2 ⟨Hnull, Hvals, Hio, Hcon, Hst, %hsg2⟩ Hms
 
 #ix_piece callNativeOut_p3 from callNativeOut_p2 by
@@ -226,8 +220,8 @@ end Defs
   intro F'
   have h2' : upd R2 1 (BitVec.ofNat 64 (0x800039f4 + 4)) 2 = s + 18446744073709550528#64 := by
     ix_reg; rw [hkR 2 (by decide) (by decide)]; subst hR1; ix_reg; exact hcall.sp
-  refine CallN_run2 (ret := ret) (v8 := rv 8) (v9 := rv 9) (v18 := rv 18) (v23 := rv 23) hlive hsf
-    hs' hs2 hs3 hal h2' ?_ ?_ ?_ ?_ ?_ ?_
+  refine CallN_run2 (ret := ret) (v8 := rv 8) (v9 := rv 9) (v18 := rv 18) (v23 := rv 23) hlive hfg
+    hal h2' ?_ ?_ ?_ ?_ ?_ ?_
   · rw [hoff 1080 (by decide), hfr 1080 (by omega)]; exact hcall.ra
   · rw [hoff 1072 (by decide), hfr 1072 (by omega)]; exact hcall.sv8
   · rw [hoff 1064 (by decide), hfr 1064 (by omega)]; exact hcall.sv9

@@ -93,19 +93,13 @@ end CloP
   obtain ⟨aF, hn, hrf, haF⟩ := callNode_of_repr hrepr hgeo
   have hneed : 1088 ≤ evalNeed (.call f args) d := by
     have := Expr.stackNeed_ge (.call f args); unfold evalNeed stackBudget; unfold evalFrame at this; omega
-  have hs := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
-  unfold Vsa.Sim.LayoutInstance.stackSL at hs hs2
-  simp only at hs hs2
-  have hs' : 0x87800000 + 1088 ≤ s.toNat := by omega
-  have hsF : s - 1088#64 = s + 18446744073709550528#64 := evalSP_eq s
-  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := by
-    rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
-  have hfg : EvalFrameG s := ⟨hsf, hs', hs2, hs3⟩
+  have hfg := hsg.evalFrame (by omega); have hsf := hfg.sf; geom_open
+  have hsF := evalSP_eq s
   have gF := evalCallGeom (o := 96) hsg
     (by have := evalNeed_call_fn f args d; unfold evalFrame at this; omega) (by decide) (by decide)
   obtain ⟨hbf, hba⟩ := Expr.bodiesBound_call hbb
   have hFt : (BitVec.ofNat 64 aF).toNat = aF := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt haF]
-  have hoff := evalSP_off (s := s) hsf (by omega)
+  have hoff := evalSP_off' hfg
   ihave ⟨Hst, HF⟩ := stackScratch_frame (f := 1088#64) hsg.le hneed $$ Hst
   rw [hsF, hsf, show (1088#64).toNat = 1088 from rfl]
   ihave ⟨%Mt0, Hms⟩ := ms_intro $$ [Hpc Hra Hregs HF]
@@ -167,7 +161,7 @@ end CloP
       (kr 18 (by decide)).trans hA.s2, hB.a3, hB.a6, hB.a5⟩
   iapply ha Φ st1 0 f args [] aX aE s sret R2 Mt2 (evalNeed (.call f args) d - 1088)
     (evalNeed (.call f args) d) (slot24 sret.toNat) hne List.drop_zero.symm rfl hle hhead hfg
-    (stackGeom_evalSP hsg hneed hsf) (by omega) hall .rfl
+    (hsg.lower hneed) (by omega) hall .rfl
   iframe Hms Hcode Hast Hfb Hst Hw Hslot IH
   isplitl []
   · unfold argVals; iempintro
@@ -199,13 +193,12 @@ end CloP
   have h2' : R2 2 = s + 18446744073709550528#64 := (hR2 2 (by decide) (by decide)).trans h2
   have h18' : R2 18 = BitVec.ofNat 64 inp := by
     rw [hR2 18 (by decide) (by decide)]; ix_reg; rw [hkeep1 18 (by decide)]; exact hA.s2
-  have hs'' := hs'
   ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF (wpW _)
   rotate_left
   · icombine HE Hcode Hst Hw Hslot Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
-  refine Call_runTM hlive hsf hs'' hs2 hs3 hn.lo hn.hi hn.off h8' h2' ?_
+  refine Call_runTM hlive hfg ⟨hn.lo, hn.hi, hn.off⟩ h8' h2' ?_
   intro vl
   apply swp_closeRM
   intro R3 Mt3 hR3 hMt3

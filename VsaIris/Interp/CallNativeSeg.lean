@@ -65,20 +65,14 @@ theorem callNativeMarshal (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP 
   unfold valOf
   icases Hv with ⟨%⟨hk5, hw2⟩, -⟩
   have hw2' : w2 = entry := BitVec.eq_of_toNat_eq (hw2.trans hentry)
-  have hs := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
-  unfold Vsa.Sim.LayoutInstance.stackSL at hs hs2
-  simp only at hs hs2
-  have hs' : 0x87800000 + 1088 ≤ s.toNat := by omega
-  have hsF : s - 1088#64 = s + 18446744073709550528#64 := evalSP_eq s
-  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := by
-    rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
-  have hoff := evalSP_off (s := s) hsf (by omega)
+  have hfg := hsg.evalFrame (by omega); geom_open
+  have hoff := evalSP_off' hfg
   ihave #Hdv := roOwn_data hnd.view $$ [$]
   iapply wp_swpF Wp
   rotate_left
   · icombine Hav Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
-  refine CallN_run1 (w0 := w0) (w1 := w1) (w2 := w2) hlive hsf hs' hs2 hs3 hnd.lo hnd.hi hnd.off
+  refine CallN_run1 (w0 := w0) (w1 := w1) (w2 := w2) hlive hfg ⟨hnd.lo, hnd.hi, hnd.off⟩
     hcall.s0 hcall.sp ?_ ?_ ?_ ?_ ?_
   · rw [hoff 96 (by decide)]; exact hcall.w0
   · rw [hoff 104 (by decide)]; exact hcall.w1
@@ -128,14 +122,8 @@ theorem callNativeEpi (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF 
       (∀ rv' : Nat → BitVec 64, ⌜KeepRegs calleeSaved rv rv'⌝ -∗ regFile rv' -∗
         stackScratch s n -∗ PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
-  have hs := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
-  unfold Vsa.Sim.LayoutInstance.stackSL at hs hs2
-  simp only at hs hs2
-  have hs' : 0x87800000 + 1088 ≤ s.toNat := by omega
-  have hsF : s - 1088#64 = s + 18446744073709550528#64 := evalSP_eq s
-  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := by
-    rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
-  have hoff := evalSP_off (s := s) hsf (by omega)
+  have hfg := hsg.evalFrame (by omega); geom_open
+  have hoff := evalSP_off' hfg
   have hreg : ∀ a, InExt (argsBase s, 24 * vs.length) a → InExt (s.toNat - 1088, 1088) a := by
     intro a ha; simp only [InExt, argsBase] at ha ⊢; omega
   iintro ⟨#Hcode, Hms, Hvals, Hst, Hk⟩
@@ -162,7 +150,7 @@ theorem callNativeEpi (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF 
   · rw [hro]; icombine Hst Hk as HF; isplitl []; iexact Hcode; iframe HF Hms
   intro F'
   refine CallN_run2 (m := ∅) (DA := []) (ret := ret) (v8 := rv 8) (v9 := rv 9) (v18 := rv 18)
-    (v23 := rv 23) hlive hsf hs' hs2 hs3 hal h2' ?_ ?_ ?_ ?_ ?_ ?_
+    (v23 := rv 23) hlive hfg hal h2' ?_ ?_ ?_ ?_ ?_ ?_
   · rw [hoff 1080 (by decide), hfr 1080 (by omega) (by omega)]; exact hcall.ra
   · rw [hoff 1072 (by decide), hfr 1072 (by omega) (by omega)]; exact hcall.sv8
   · rw [hoff 1064 (by decide), hfr 1064 (by omega) (by omega)]; exact hcall.sv9
@@ -218,14 +206,9 @@ theorem callNativeAssert (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (
        (⌜¬ AssertOk vs⌝ -∗ abortCore N L Room inp (s + 18446744073709550528#64) nativeAssertNeed -∗
           stackScratch s n -∗ slot24 sret.toNat -∗ Wp.W Φ))
     ⊢ Wp.W Φ := by
-  have hs := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
-  unfold Vsa.Sim.LayoutInstance.stackSL at hs hs2
-  simp only at hs hs2
   have hn : 1088 ≤ n := by unfold nativeAssertNeed at hroom; omega
-  have hsF : s - 1088#64 = s + 18446744073709550528#64 := evalSP_eq s
-  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := by
-    rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
-  have hoff := evalSP_off (s := s) hsf (by omega)
+  have hfg := hsg.evalFrame (by omega); have hsf := hfg.sf; geom_open
+  have hoff := evalSP_off' hfg
   have hms' : n - 1088 ≤ (s + 18446744073709550528#64).toNat := by rw [hsf]; omega
   have hinpN : (BitVec.ofNat 64 inp).toNat = inp := Nat.mod_eq_of_lt hinpLt
   have hna' : nativeAssertNeed ≤ n - 1088 := Nat.le_sub_of_add_le hroom
@@ -300,7 +283,7 @@ theorem callNativeAssert (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (
   ihave Hsp := Hsp0 $$ %R1
   iframe Hsp Hcode Hms Hslot Hvals Himg Hjb Hw
   isplitl [Hst]
-  · unfold stackAt; iframe Hst; ipureintro; exact (stackGeom_evalSP hsg hn hsf).narrow hna'
+  · unfold stackAt; iframe Hst; ipureintro; exact (hsg.lower hn).narrow hna'
   isplit
   ·
     iintro %R2 ⟨%hk2, %hok, Hnull, Hvals, Hw, ⟨Hst, -⟩⟩ Hms

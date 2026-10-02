@@ -145,6 +145,16 @@ structure ReadOK (k : Nat) : Prop where
   off : k < Vsa.Sim.tohostAddr ∨ Vsa.Sim.tohostAddr + 16 ≤ k
   win : k + 8 ≤ 0x88000000 ∧ (k + 8 ≤ Vsa.Sim.tohostAddr ∨ Vsa.Sim.tohostAddr + 16 ≤ k)
 
+structure RamWin (a n : Nat) : Prop where
+  lo : 0x80000000 ≤ a
+  hi : a + n ≤ 0x100000000
+  htif : a + n ≤ htifLo ∨ htifLo + 16 ≤ a
+
+theorem RamWin.ofEnds {a k : Nat} (h0 : ReadOK a) (h1 : ReadOK (a + k)) (hk : k < 16 := by omega) :
+    RamWin a (k + 1) :=
+  ⟨h0.lo, by have := h1.hi; omega, by
+    have := h0.off; have := h1.off; unfold htifLo; unfold Vsa.Sim.tohostAddr at *; omega⟩
+
 def astEG (a : Nat) (e : Expr) : IProp GF :=
   iprop(∃ (P : Nat → Prop) (m : Mem), ⌜ExprReprWithin m P a e ∧ ∀ k, P k → ReadOK k⌝ ∗ roOn P m)
 
