@@ -146,6 +146,18 @@ def cnf : Bool → Fm → List (List Lit)
   | false, .or p q => cnf false p ++ cnf false q
   | b, .not p => cnf (!b) p
 
+/-- `min cap (cnf b f).length`, computed without building the clauses: a negated conjunction
+of `k` disequalities has `2^k` clauses (a goal `q ≠ 1 ∧ q ≠ 10 ∧ …` cost 1.4 s before failing). -/
+def cnfLen (cap : Nat) : Bool → Fm → Nat
+  | true, .eq _ _ => 2
+  | false, .ne _ _ => 2
+  | true, .and p q => min cap (cnfLen cap true p + cnfLen cap true q)
+  | false, .and p q => min cap (cnfLen cap false p * cnfLen cap false q)
+  | true, .or p q => min cap (cnfLen cap true p * cnfLen cap true q)
+  | false, .or p q => min cap (cnfLen cap false p + cnfLen cap false q)
+  | b, .not p => cnfLen cap (!b) p
+  | _, _ => 1
+
 def CHolds (ρ : List Nat) (cs : List (List Lit)) : Prop := ∀ c ∈ cs, ∃ l ∈ c, l.holds ρ
 
 theorem prod_holds {ρ : List Nat} {A B : List (List Lit)} (hA : CHolds ρ A ∨ CHolds ρ B) :
@@ -610,7 +622,7 @@ def dbmCore (g : MVarId) : MetaM Bool := g.withContext do
       ty.isAppOf ``Eq || ty.isAppOf ``Ne || ty.isAppOf ``Or || ty.isAppOf ``And || ty.isAppOf ``Not then
       let (r, as) ← (reifyF ty).run #[]
       if let some f := r then
-        if (cnf true f).length ≤ 8 then info := info.push (ty, d.toExpr, as)
+        if cnfLen 9 true f ≤ 8 then info := info.push (ty, d.toExpr, as)
   let mut allA : Array Expr := as0
   for (_, _, as) in info do
     for a in as do unless allA.contains a do allA := allA.push a
@@ -648,6 +660,7 @@ def dbmCore (g : MVarId) : MetaM Bool := g.withContext do
           let pf := mkApp2 (mkConst ``BitVec.isLt) w x
           facts := facts.push (← instantiateMVars (← inferType pf), pf)
   let some (gf, st, fs, kept) ← reifyAll tgt facts | return false
+  if cnfLen 65 false gf > 64 then return false
   let some (sel, gk, ck, used) := certs fs.toList gf | return false
   -- re-solve over the facts the certificate uses: the kernel re-walks only those
   let small := used.toArray.map fun i => kept[i]!
