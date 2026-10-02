@@ -344,3 +344,32 @@ already said 9 of the 12 L cases contain no idiom they target (E54), and the pil
 Combination for the next step: PA + PC + PD (merged as `exp-R11-C` 933e8337, conflicts only in the
 held-out re-proofs, PD's versions kept; full `lake build` green, 1,562 jobs), measured on the whole
 scope and on the fresh L cases.
+
+## 8. The combination: whole scope and fresh cases
+
+**Whole scope** (all 62 target modules, single file, one thread, base 78f9fb97 and `exp-R11-C`
+933e8337 interleaved per file, 8 shards, min of 2, load 10–20; `~/syi-r11/scope/`): **360.6 → 286.0 s
+(−20.7%)**, no file over the bound. Largest: EnvDefineSpans 36.2 → 19.1, ProofStringify 43.4 → 32.0,
+EnvGetSpans 11.2 → 4.8, EnvSetSpans 9.6 → 4.1, ProofNativeAssert 17.6 → 12.4, ProofNativePrint 17.3 →
+12.3, ProofValueEqual 15.2 → 11.6, EnvSetHit 4.5 → 2.1, EnvGetHit 4.3 → 2.1, CallCloRuns 9.8 → 7.5.
+The fresh T modules forecast −22.5%; the scope came in at −20.7%.
+
+**Fresh L cases** (re-proved on the combination by one agent, no layer code allowed; `exp-R11-F`
+5d55dfaf; statement hashes identical):
+
+| case | base | after | round-11 layer | older layer | plain cleanup |
+|---|---:|---:|---:|---:|---:|
+| `whileStage` | 26 | 25 | 0 | 0 | −1 |
+| `vp_native` | 36 | 26 | 0 | 0 | −10 |
+| `wp_call_reallocNull` | 43 | 41 | 0 | −1 | −1 |
+| `roOwn_clod` | 44 | 42 | 0 | 0 | −2 |
+| `def_grow` | 400 | 374 | 0 (three `rd_back` uses −4 lines reverted: +10–15% file CPU) | 0 | −26 |
+| `sg_filled` | 64 | 44 | −9 (PD `rd_back`; a near-clone of the tuned `sg_memcpy`) | 0 | −11 |
+| total | 613 | 552 (−10%) | −9 (1.5%) | −1 | −51 |
+
+PC's records bought nothing on the fresh cases (`def_grow`'s window record `EnvWin` is outside them;
+`vp_native`'s facts are projections of a context field already); PA made no hand line dead there;
+`reg_keep` applied to no fresh goal (the keep goals are about an abstract `R'` with a keep hypothesis,
+not an `upd` chain). **Forecast for the line layers: 1.5% of the lines of fresh cases**, against 36
+(PD) and 41 (PC) setup lines. The lines of these proofs are spec-specific glue and record bookkeeping;
+an agent's cleanup pass removes 8–20% of them without any layer.
