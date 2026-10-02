@@ -1,4 +1,5 @@
 import VsaIris.Vsa.AllocTac
+import VsaIris.Vsa.FootKey
 import VsaIris.Interp.Repr
 
 namespace VsaIris.Interp

@@ -1,5 +1,6 @@
 import VsaIris.Vsa.SymExec
 import VsaIris.Interp.ITac
+import VsaIris.Vsa.FootKey
 
 /-!
 # The symbolic route for `IW` runs
@@ -874,7 +875,7 @@ def symRunCore (explore : Bool) (fuel : Nat) (h : Syntax) (facts : Array Term) (
     List.not_mem_nil, false_implies, implies_true, and_true, AFact.holds, SE.den, reduceCtorEq,
     Option.some.injEq, forall_eq', List.mem_append, mem_accAddrs_iff', Nat.mod_one, forall_const,
     BitVec.add_zero, upd_apply, Nat.reduceEqDiff, ite_true, ite_false, $lems,*, *] <;> and_intros <;>
-    (try intros) <;> first | exact True.intro |
+    (try intros) <;> first | exact True.intro | foot_key |
       (have _htoh : tohostAddr = 0x8001ad00 := rfl; omega)))
   let proveGeom (gg : MVarId) : TacticM Bool := do
     let saved ← saveState

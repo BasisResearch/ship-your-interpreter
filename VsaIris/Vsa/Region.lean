@@ -1,5 +1,6 @@
 import VsaIris.Vsa.MallocCtx
 import VsaIris.Vsa.RegionCore
+import VsaIris.Vsa.KeyNF
 import VsaIris.Vsa.Dbm
 
 /-!
@@ -342,16 +343,6 @@ theorem pres_log {C : MCtx} {Mt : Mem} (L : List WEntry)
   fun b hb => writeLog_present _ _ _ (hp b hb)
 
 /-! ## Tactics -/
-
-/-- `BitVec.toNat_add` as a propositional rewrite. The core lemma is an `rfl` lemma,
-so `simp` would leave the kernel a definitional check that unfolds `Nat.mod` on
-the offset literal (2^64 steps for a negative offset); through this lemma the
-kernel only infers a type. -/
-theorem key_toNat_add (x y : BitVec 64) :
-    (x + y).toNat = (x.toNat + y.toNat) % 18446744073709551616 := (BitVec.toNat_add x y).trans rfl
-
-theorem key_toNat_ofNat (x : Nat) : (BitVec.ofNat 64 x).toNat = x % 18446744073709551616 :=
-  (BitVec.toNat_ofNat x 64).trans rfl
 
 /-- A negative literal offset: adding `c` modulo `2^64` subtracts `2^64 - c`. -/
 theorem key_sub (a c : Nat) (h : 18446744073709551616 - c ≤ a ∧ a < 18446744073709551616 ∧
