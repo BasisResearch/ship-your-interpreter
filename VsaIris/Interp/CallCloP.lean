@@ -373,7 +373,7 @@ theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     iapply closureSeqP_all hlive N vsaLayoutP vsaRoomB inp Core (d + 1) frame cd.body Φ
       ⟨(cd.params.zip vs).foldl (fun s (x, v) => s.define frame x v) store', st2.out⟩ 0 count bod arr
       (R2 10) s R4 Mt4 m P cd.body (n - 1088) (fun M => CloSpills M s ret rv) iprop(⌜True⌝) hne
-      List.drop_zero.symm hbn hch hfg (hsg.lower hn1088) hall (cloSlotGeom hfg) hat.spills hinv
+      List.drop_zero.symm hbn hch hfg (hsg.lowerEval hn1088) hall (cloSlotGeom hfg) hat.spills hinv
     iframe Hms Hcode Hro Hnew2 Hst Hslot Hw IHs
     isplit
     · iintro %R5 %Mt5 %st' %status %hex %⟨hk5, h10, hinv5⟩ - Hms Hst Hret Hw

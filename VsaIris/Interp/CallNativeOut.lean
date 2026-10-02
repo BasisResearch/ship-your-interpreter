@@ -189,7 +189,7 @@ end Defs
     unfold stackAt
     iframe Hst
     ipureintro
-    exact (hsg.lower hn).narrow (by omega)
+    exact (hsg.lowerEval hn).narrow (by omega)
   iintro %R2 %hkeep2 ⟨Hnull, Hvals, Hio, Hcon, Hst, %hsg2⟩ Hms
 
 #ix_piece callNativeOut_p3 from callNativeOut_p2 by

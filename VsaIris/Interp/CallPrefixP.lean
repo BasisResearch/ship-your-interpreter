@@ -161,7 +161,7 @@ end CloP
       (kr 18 (by decide)).trans hA.s2, hB.a3, hB.a6, hB.a5⟩
   iapply ha Φ st1 0 f args [] aX aE s sret R2 Mt2 (evalNeed (.call f args) d - 1088)
     (evalNeed (.call f args) d) (slot24 sret.toNat) hne List.drop_zero.symm rfl hle hhead hfg
-    (hsg.lower hneed) (by omega) hall .rfl
+    (hsg.lowerEval hneed) (by omega) hall .rfl
   iframe Hms Hcode Hast Hfb Hst Hw Hslot IH
   isplitl []
   · unfold argVals; iempintro

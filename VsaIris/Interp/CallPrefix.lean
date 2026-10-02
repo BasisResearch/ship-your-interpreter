@@ -247,7 +247,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
     ⟨hr2, hr8, hr18, by subst hR2; ix_reg, by subst hR2; ix_reg <;> rfl, hr15⟩
   iapply ha Φ k 0 f args [] aX aE s R2 Mt2 (evalNeed (.call f args) d - 1088) hne
     List.drop_zero.symm rfl hlen hhead hfg
-    (hsg.lower hneed) hall
+    (hsg.lowerEval hneed) hall
   iframe Hms Hcode Hast Hfb Hst Hw
   isplitl []
   · unfold argVals; iempintro

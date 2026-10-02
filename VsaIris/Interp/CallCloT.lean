@@ -206,7 +206,7 @@ theorem cloCallT (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
           world N vsaLayoutP vsaRoomB inp (.counted k) st' d -∗ PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗
           (twpW (vsaModel live)).W Φ)))
       hne List.drop_zero.symm hbn hch hfg
-      (hsg.lower (by have := hn1; omega)) hall (cloSlotGeom hfg) hat.spills hinv
+      (hsg.lowerEval (by have := hn1; omega)) hall (cloSlotGeom hfg) hat.spills hinv
     iframe Hms Hcode Hro Hnew2 Hst Hslot Hw
     iframe Hsr Hk
     iintro %R5 %Mt5 %⟨hk5, h10, hinv5⟩ ⟨Hsr, Hk⟩ Hms Hst Hret Hw

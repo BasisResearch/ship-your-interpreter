@@ -85,7 +85,7 @@ theorem StackGeom.evalFrame {s : BitVec 64} {n : Nat} (h : StackGeom s n) (hn : 
   have := h.le; have h2 := h.lo; have h3 := h.hi; simp only [Vsa.Sim.LayoutInstance.stackSL] at h2 h3
   exact ⟨toNat_frame rfl (by omega), by omega, h3, h.al⟩
 
-theorem StackGeom.lower {s : BitVec 64} {n : Nat} (h : StackGeom s n) (hn : 1088 ≤ n) :
+theorem StackGeom.lowerEval {s : BitVec 64} {n : Nat} (h : StackGeom s n) (hn : 1088 ≤ n) :
     StackGeom (s + 18446744073709550528#64) (n - 1088) := by
   have hf := (h.evalFrame hn).sf; have := h.le; have := h.lo; have := h.hi; have := h.al; have := h.top
   refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> rw [hf] <;> omega

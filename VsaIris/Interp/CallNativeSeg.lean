@@ -279,7 +279,7 @@ theorem callNativeAssert (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (
   ihave Hsp := Hsp0 $$ %R1
   iframe Hsp Hcode Hms Hslot Hvals Himg Hjb Hw
   isplitl [Hst]
-  · unfold stackAt; iframe Hst; ipureintro; exact (hsg.lower hn).narrow hna'
+  · unfold stackAt; iframe Hst; ipureintro; exact (hsg.lowerEval hn).narrow hna'
   isplit
   ·
     iintro %R2 ⟨%hk2, %hok, Hnull, Hvals, Hw, ⟨Hst, -⟩⟩ Hms
