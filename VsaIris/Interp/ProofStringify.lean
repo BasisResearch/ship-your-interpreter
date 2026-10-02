@@ -31,8 +31,7 @@ macro_rules
     (hk : ldv .lw M p.toNat = 0#64) :
     IW live ∅ [] (sgF s p) Q stringifyPC (upd rv 1 r) M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
     unfold stringifyPC
     sym_run1 hlive using [h10, h2, hsf, hk] at 0x80003048
 
@@ -46,8 +45,7 @@ macro_rules
     (hb : ldv .lw M (p + 8#64).toNat = bw) :
     IW live ∅ [] (sgF s p) Q stringifyPC (upd rv 1 r) M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
     have hp8 : (p + 8#64).toNat = p.toNat + 8 := by rw [BitVec.toNat_add]; simp; omega
     unfold stringifyPC
     sym_run1 hlive using [h10, h2, hsf, hk, hp8, hb] at 0x8000300c
@@ -63,8 +61,7 @@ macro_rules
     (hi : ldv .ld M (p + 8#64).toNat = iw) :
     IW live ∅ [] (sgF s p) Q stringifyPC (upd rv 1 r) M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
     have hp8 : (p + 8#64).toNat = p.toNat + 8 := by rw [BitVec.toNat_add]; simp; omega
     unfold stringifyPC
     sym_run1 hlive using [h10, h2, hsf, hk, hp8, hi] at 0x800030d8
@@ -79,8 +76,7 @@ macro_rules
     (hs : ldv .ld M (p + 8#64).toNat = sw) :
     IW live ∅ [] (sgF s p) Q stringifyPC (upd rv 1 r) M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
     have hp8 : (p + 8#64).toNat = p.toNat + 8 := by rw [BitVec.toNat_add]; simp; omega
     unfold stringifyPC
     sym_run1 hlive using [h10, h2, hsf, hk, hp8, hs] at 0x800030ec
@@ -94,8 +90,7 @@ macro_rules
     (hk : ldv .lw M p.toNat = 5#64) :
     IW live ∅ [] (sgF s p) Q stringifyPC (upd rv 1 r) M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
     have hp8 : (p + 8#64).toNat = p.toNat + 8 := by rw [BitVec.toNat_add]; simp; omega
     unfold stringifyPC
     sym_run1 hlive using [h10, h2, hsf, hk] at 0x80003048
@@ -108,8 +103,7 @@ macro_rules
     (hp1 : p.toNat % 8 = 0) (hp2 : 0x8001ad00 + 16 ≤ p.toNat) (hp3 : p.toNat + 24 ≤ 0x100000000) :
     IW live ∅ [] (sgF s p) Q 0x80003010#64 R M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
     sym_run1 hlive using [h2, hsf] at 0x80003048
 
 #ix_seg sg_backInt {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
@@ -120,8 +114,7 @@ macro_rules
     (hp1 : p.toNat % 8 = 0) (hp2 : 0x8001ad00 + 16 ≤ p.toNat) (hp3 : p.toNat + 24 ≤ 0x100000000) :
     IW live ∅ [] (sgF s p) Q 0x800030dc#64 R M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
     sym_run1 hlive using [h2, hsf] at 0x80003048
 
 #ix_seg sg_backFn {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
@@ -132,8 +125,7 @@ macro_rules
     (hp1 : p.toNat % 8 = 0) (hp2 : 0x8001ad00 + 16 ≤ p.toNat) (hp3 : p.toNat + 24 ≤ 0x100000000) :
     IW live ∅ [] (sgF s p) Q 0x80003044#64 R M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
     sym_run1 hlive using [h2, hsf] at 0x80003048
 
 #ix_seg sg_len {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
@@ -144,8 +136,7 @@ macro_rules
     (hp1 : p.toNat % 8 = 0) (hp2 : 0x8001ad00 + 16 ≤ p.toNat) (hp3 : p.toNat + 24 ≤ 0x100000000) :
     IW live ∅ [] (sgF s p) Q 0x8000304c#64 R M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
     sym_run1 hlive using [h2, hsf] at 0x80003058
 
 #ix_seg sg_oom {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
@@ -157,8 +148,7 @@ macro_rules
     (h10 : R 10 = 0#64) :
     IW live ∅ [] (sgF s p) Q 0x8000305c#64 R M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
     sym_run1 hlive using [h2, hsf, h10] at 0x80003140
     all_goals first
       | (intro hc; exfalso; apply hc; ix_reg; exact h10)
@@ -173,8 +163,7 @@ macro_rules
     (h10 : R 10 ≠ 0#64) :
     IW live ∅ [] (sgF s p) Q 0x8000305c#64 R M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
     sym_run1 hlive using [h2, hsf] at 0x8000306c
 
 #ix_seg sg_epi {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
@@ -199,8 +188,7 @@ macro_rules
     (hp1 : p.toNat % 8 = 0) (hp2 : 0x8001ad00 + 16 ≤ p.toNat) (hp3 : p.toNat + 24 ≤ 0x100000000) :
     IW live ∅ [] (sgF s p) Q 0x800030f0#64 R M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
     sym_run1 hlive using [h2, hsf] at 0x800030f8
 
 #ix_seg sg_soom {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
@@ -212,8 +200,7 @@ macro_rules
     (h10 : R 10 = 0#64) :
     IW live ∅ [] (sgF s p) Q 0x800030fc#64 R M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
     sym_run1 hlive using [h2, hsf, h10] at 0x80003140
     all_goals first
       | (intro hc; exfalso; apply hc; ix_reg; exact h10)
@@ -228,8 +215,7 @@ macro_rules
     (h10 : R 10 ≠ 0#64) :
     IW live ∅ [] (sgF s p) Q 0x800030fc#64 R M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
     sym_run1 hlive using [h2, hsf] at 0x8000310c
 
 #ix_seg sg_sepi {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
@@ -255,8 +241,7 @@ macro_rules
     (hk : ldv .lw M p.toNat = 4#64) :
     IW live ∅ [] (sgF s p) Q stringifyPC (upd rv 1 r) M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
     unfold stringifyPC
     sym_run1 hlive using [h10, h2, hsf, hk] at 0x8000301c
 
@@ -272,8 +257,7 @@ macro_rules
     (hnz : BitVec.ofNat 64 nm ≠ 0#64) (hcp : cp < 2 ^ 64) (hql : q + 8 < 2 ^ 64) :
     IW live Dt (clodA cp q) (sgF s p) Q 0x8000301c#64 R M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
     have c1 := hc0.lo; have c2 := hc0.hi; have c3 := hc0.off
     have c4 := hc7.lo; have c5 := hc7.hi; have c6 := hc7.off
     have q1 := hq0.lo; have q2 := hq0.hi; have q3 := hq0.off
@@ -294,8 +278,7 @@ macro_rules
     (hcp : cp < 2 ^ 64) (hql : q + 8 < 2 ^ 64) :
     IW live Dt (clodA cp q) (sgF s p) Q 0x8000301c#64 R M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
     have c1 := hc0.lo; have c2 := hc0.hi; have c3 := hc0.off
     have c4 := hc7.lo; have c5 := hc7.hi; have c6 := hc7.off
     have q1 := hq0.lo; have q2 := hq0.hi; have q3 := hq0.off
@@ -688,8 +671,7 @@ theorem sg_oomEnd (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     SgRest Wp Φ N inp p s r v x ρ H c o rv Mp ∗ ms 0x80003140#64 R (sgF s p) M ⊢ Wp.W Φ := by
   have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
   unfold stringifyNeed snprintfNeed at hs1
-  have e112 : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-    rw [BitVec.toNat_add]; simp; omega
+  have e112 : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
   unfold SgRest
   iintro ⟨⟨#Hcode, #Himg, -, -, Hheap, Hstd, Hcon, Hst, Hk⟩, Hms⟩
   ihave ⟨Herr, -⟩ := ErrnoOwn.heapRes_errno _ _ $$ Hheap
@@ -983,8 +965,7 @@ theorem sg_malloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
   unfold stringifyNeed snprintfNeed at hs1
   have hlen := f.hlen
-  have e112 : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-    rw [BitVec.toNat_add]; simp; omega
+  have e112 : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
   have hn : stringifyNeed - 112 ≤ (s + 18446744073709551504#64).toNat := by
     rw [e112]; unfold stringifyNeed snprintfNeed; omega
   have hm : allocHeadroom ≤ stringifyNeed - 112 := by unfold allocHeadroom stringifyNeed snprintfNeed; omega
@@ -1362,8 +1343,7 @@ theorem sg_intArm (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     rw [← ep8]; exact hi
   have eB : (s + 18446744073709551504#64 + 16#64).toNat = s.toNat - 96 := by
     rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
-  have e112 : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-    rw [BitVec.toNat_add]; simp; omega
+  have e112 : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
   have hsl : ∀ k, sgF s p k ↔ (sgFnb s p k ∨ InExt (s.toNat - 96, 64) k) := fun k => by
     constructor
     · intro h; by_cases h' : InExt (s.toNat - 96, 64) k
@@ -1739,8 +1719,7 @@ theorem sg_strMalloc (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × Strin
       ms 0x800030f8#64 R (sgF s p) M ⊢ Wp.W Φ := by
   have hs1 := cx.hs1; have hs2 := cx.hs2; have hs3 := cx.hs3
   unfold stringifyNeed snprintfNeed at hs1
-  have e112 : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-    rw [BitVec.toNat_add]; simp; omega
+  have e112 : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
   have hn : stringifyNeed - 112 ≤ (s + 18446744073709551504#64).toNat := by
     rw [e112]; unfold stringifyNeed snprintfNeed; omega
   have hm : allocHeadroom ≤ stringifyNeed - 112 := by unfold allocHeadroom stringifyNeed snprintfNeed; omega
@@ -1876,8 +1855,7 @@ theorem sg_cloNamed (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String
   unfold stringifyNeed snprintfNeed at hs1
   have eB : (s + 18446744073709551504#64 + 16#64).toNat = s.toNat - 96 := by
     rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
-  have e112 : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-    rw [BitVec.toNat_add]; simp; omega
+  have e112 : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
   have hsl : ∀ k, sgF s p k ↔ (sgFnb s p k ∨ InExt (s.toNat - 96, 64) k) := fun k => by
     constructor
     · intro h; by_cases h' : InExt (s.toNat - 96, 64) k

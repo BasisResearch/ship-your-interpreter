@@ -373,7 +373,7 @@ theorem cloCallP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String �
     iapply closureSeqP_all hlive N vsaLayoutP vsaRoomB inp Core (d + 1) frame cd.body Φ
       ⟨(cd.params.zip vs).foldl (fun s (x, v) => s.define frame x v) store', st2.out⟩ 0 count bod arr
       (R2 10) s R4 Mt4 m P cd.body (n - 1088) (fun M => CloSpills M s ret rv) iprop(⌜True⌝) hne
-      List.drop_zero.symm hbn hch hfg (hsg.lowerE hn1088 hfg.sf) hall (cloSlotGeom hfg) hat.spills hinv
+      List.drop_zero.symm hbn hch hfg (hsg.lowerEval hn1088) hall (cloSlotGeom hfg) hat.spills hinv
     iframe Hms Hcode Hro Hnew2 Hst Hslot Hw IHs
     isplit
     · iintro %R5 %Mt5 %st' %status %hex %⟨hk5, h10, hinv5⟩ - Hms Hst Hret Hw
@@ -688,13 +688,7 @@ theorem callClosureP (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × Strin
     ⊢ (wpW (vsaModel live)).W Φ := by
   have hge := evalNeed_call_ge f args d
   have hrt := evalNeed_call_rtErr f args d
-  have hs := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
-  unfold Vsa.Sim.LayoutInstance.stackSL at hs hs2
-  simp only at hs hs2
-  have hsF : s - 1088#64 = s + 18446744073709550528#64 := evalSP_eq s
-  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := by
-    rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
-  have hfg : EvalFrameG s := ⟨hsf, by omega, hs2, hs3⟩
+  have hfg := hsg.evalFrame (by omega); geom_open
   have hinpG := hE.inpGeom
   have hinpN : (BitVec.ofNat 64 inp).toNat = inp := Nat.mod_eq_of_lt hE.inpLt
   iintro ⟨#IHs, #HE, #Hcode, #Hast, #Hv, #Hav, Hms, Hst, Hw, Hsr, Hk⟩

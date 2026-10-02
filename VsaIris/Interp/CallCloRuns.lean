@@ -35,9 +35,9 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     {s v22 : BitVec 64} {j argc : Nat} (hfg : EvalFrameG s) (hj : j < argc) (hc : argc ≤ 32)
     (h2 : R 2 = s + 18446744073709550528#64) (h22 : R 22 = BitVec.ofNat 64 (8 * argc))
     (hO : ldv .ld Mt (s.toNat - 1088) = BitVec.ofNat 64 (8 * j))
-    (h1024 : ldv .ld Mt (s + 18446744073709550528#64 + 1024#64).toNat = v22) :
+    (h1024 : ldv .ld Mt (s.toNat - 1088 + 1024) = v22) :
     IW live m [] (InExt (s.toNat - 1088, 1088)) Q 0x80003314#64 R Mt
-  by with_geom sym_run hlive using [h2, h22, hO, h1024, hfg.sf] at 0x800032dc 0x80003328
+  by with_frame with_geom sym_run hlive using [h2, h22, hO, h1024, hfg.sf] at 0x800032dc 0x80003328
 
 #ix_seg CloB_runB {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -62,15 +62,13 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
     {s ret v8 v9 v18 v19 v21 v23 : BitVec 64} (hfg : EvalFrameG s) (hal : ret.toNat % 4 = 0)
     (h2 : R 2 = s + 18446744073709550528#64)
-    (hRA : ldv .ld Mt (s + 18446744073709550528#64 + 1080#64).toNat = ret)
-    (hS0 : ldv .ld Mt (s + 18446744073709550528#64 + 1072#64).toNat = v8)
-    (hS1 : ldv .ld Mt (s + 18446744073709550528#64 + 1064#64).toNat = v9)
-    (hS2 : ldv .ld Mt (s + 18446744073709550528#64 + 1056#64).toNat = v18)
-    (hS3 : ldv .ld Mt (s + 18446744073709550528#64 + 1048#64).toNat = v19)
-    (hS5 : ldv .ld Mt (s + 18446744073709550528#64 + 1032#64).toNat = v21)
-    (hS7 : ldv .ld Mt (s + 18446744073709550528#64 + 1016#64).toNat = v23) :
+    (hRA : ldv .ld Mt (s.toNat - 1088 + 1080) = ret) (hS0 : ldv .ld Mt (s.toNat - 1088 + 1072) = v8)
+    (hS1 : ldv .ld Mt (s.toNat - 1088 + 1064) = v9) (hS2 : ldv .ld Mt (s.toNat - 1088 + 1056) = v18)
+    (hS3 : ldv .ld Mt (s.toNat - 1088 + 1048) = v19)
+    (hS5 : ldv .ld Mt (s.toNat - 1088 + 1032) = v21)
+    (hS7 : ldv .ld Mt (s.toNat - 1088 + 1016) = v23) :
     IW live m [] (InExt (s.toNat - 1088, 1088)) Q 0x80003968#64 R Mt
-  by with_geom sym_run hlive using [h2, hRA, hS0, hS1, hS2, hS3, hS5, hS7, hfg.sf, hal]
+  by with_frame with_geom sym_run hlive using [h2, hRA, hS0, hS1, hS2, hS3, hS5, hS7, hfg.sf, hal]
 
 #ix_seg CloX_runX {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -88,16 +86,14 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
     (hr4 : sret.toNat + 24 ≤ s.toNat - 1088 ∨ s.toNat ≤ sret.toNat)
     (hal : ret.toNat % 4 = 0)
     (h9 : R 9 = sret) (h2 : R 2 = s + 18446744073709550528#64)
-    (hRA : ldv .ld Mt (s + 18446744073709550528#64 + 1080#64).toNat = ret)
-    (hS0 : ldv .ld Mt (s + 18446744073709550528#64 + 1072#64).toNat = v8)
-    (hS1 : ldv .ld Mt (s + 18446744073709550528#64 + 1064#64).toNat = v9)
-    (hS2 : ldv .ld Mt (s + 18446744073709550528#64 + 1056#64).toNat = v18)
-    (hS3 : ldv .ld Mt (s + 18446744073709550528#64 + 1048#64).toNat = v19)
-    (hS5 : ldv .ld Mt (s + 18446744073709550528#64 + 1032#64).toNat = v21)
-    (hS7 : ldv .ld Mt (s + 18446744073709550528#64 + 1016#64).toNat = v23) :
+    (hRA : ldv .ld Mt (s.toNat - 1088 + 1080) = ret) (hS0 : ldv .ld Mt (s.toNat - 1088 + 1072) = v8)
+    (hS1 : ldv .ld Mt (s.toNat - 1088 + 1064) = v9) (hS2 : ldv .ld Mt (s.toNat - 1088 + 1056) = v18)
+    (hS3 : ldv .ld Mt (s.toNat - 1088 + 1048) = v19)
+    (hS5 : ldv .ld Mt (s.toNat - 1088 + 1032) = v21)
+    (hS7 : ldv .ld Mt (s.toNat - 1088 + 1016) = v23) :
     IW live m [] (fun b => InExt (s.toNat - 1088, 1088) b ∨ InExt (sret.toNat, 24) b)
       Q 0x8000339c#64 R Mt
-  by with_geom sym_run hlive using [h9, h2, hRA, hS0, hS1, hS2, hS3, hS5, hS7, hfg.sf, hal]
+  by with_frame with_geom sym_run hlive using [h9, h2, hRA, hS0, hS1, hS2, hS3, hS5, hS7, hfg.sf, hal]
 
 #ix_seg CloE_runD {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}

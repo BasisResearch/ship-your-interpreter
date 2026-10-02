@@ -23,8 +23,8 @@ open VsaIris.Inst Vsa.RuntimeRepr
       ownImg (InExt (inp.toNat + 8, 4)) dimg ∗
       CloHeadK live Wp Φ cd Mt s aX sret inp ret (BitVec.ofNat 64 e) (BitVec.ofNat 64 q) rv argc dep
     ⊢ Wp.W Φ by
-  have hsf := hfg.sf; have hs' := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
-  have hoff := evalSP_off (s := s) hsf (by omega)
+  geom_open
+  have hoff := evalSP_off (s := s) hfg.sf (by omega)
   iintro ⟨#Hcode, #Hast, #Himg, #Hro, Hms, Hdep, Hk⟩
   unfold astEG
   icases Hast with ⟨%Pc, %mc, %⟨hrepr, hgeo⟩, #Hroc⟩
@@ -35,12 +35,9 @@ open VsaIris.Inst Vsa.RuntimeRepr
   rotate_left
   · icombine Hcode Himg Hro Hdep Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
-  refine CallK_runA (w0 := w0) (w1 := w1) (w2 := w2) hlive hsf hs' hs2 hs3 hnd.lo hnd.hi hnd.off
-    hcall.s0 hcall.sp ?_ ?_ ?_ ?_ ?_
-  · rw [hoff 96 (by decide)]; exact hcall.w0
-  · rw [hoff 104 (by decide)]; exact hcall.w1
-  · rw [hoff 112 (by decide)]; exact hcall.w2
-  · rw [hoff 96 (by decide)]; exact ldv_lw_of_ld hcall.w0 hk4 (by decide)
+  refine CallK_runA (w0 := w0) (w1 := w1) (w2 := w2) hlive hfg ⟨hnd.lo, hnd.hi, hnd.off⟩
+    hcall.s0 hcall.sp hcall.w0 hcall.w1 hcall.w2
+    (ldv_lw_of_ld hcall.w0 hk4 (by decide)) ?_
   intro vl _ _
   apply swp_closeRM
   intro R1 Mt1 hR1 hMt1
@@ -56,9 +53,8 @@ open VsaIris.Inst Vsa.RuntimeRepr
   rotate_left
   · icombine Hcode Himg Hro Hdep Hk as HF; isplitl []; iexact Hdc; iframe HF Hms
   intro F'
-  refine CallK_runB (cp := w1) hlive hsf hs' hs2 hs3 hc1.lo (by have := hc16.hi; omega)
-    (by have := hc1.off; have := hc16.off; omega)
-    (by subst hR1; ix_reg) (by subst hR1; ix_reg; exact hcall.sp) hq ?_
+  refine CallK_runB (cp := w1) hlive hfg (.ofEnds hc1 hc16) (by subst hR1; ix_reg)
+    (by subst hR1; ix_reg; exact hcall.sp) hq ?_
   apply swp_closeRM
   intro R2 Mt2 hR2 hMt2
   unfold F'
@@ -96,8 +92,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   rotate_left
   · icombine Hcode Himg Hro Hk as HF; isplitl []; iexact Hdf; iframe HF Hms
   intro F'
-  refine CallK_runC hlive hsf hs' hs2 hs3 hfn.lo (by have := hfn.hi; omega)
-    (by have := hfn.off; omega) hinpG.lo hinpG.hi hi3 hinpA h14 h18 h2' rfl hdl ?_ ?_ ?_
+  refine CallK_runC hlive hfg ⟨hfn.lo, hfn.hi, hfn.off⟩ hinpG hi3 hinpA h14 h18 h2' rfl hdl ?_ ?_ ?_
   intro hne
   apply swp_closeRM
   intro R3 Mt3 hR3 hMt3
@@ -132,8 +127,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   rotate_left
   · isplitl []; iexact Hdc; isplitr [Hms]; iexact Hk; iexact Hms
   intro F'
-  refine CallK_runD (inp := inp) hlive hsf hs' hs2 hs3 hc1.lo (by have := hc16.hi; omega)
-    (by have := hc1.off; have := hc16.off; omega) h13 h2'' he ?_
+  refine CallK_runD (inp := inp) hlive hfg (.ofEnds hc1 hc16) h13 h2'' he ?_
   apply swp_closeRM
   intro R4 Mt4 hR4 hMt4
   unfold F'

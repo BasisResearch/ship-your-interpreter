@@ -56,6 +56,40 @@ theorem EvalFrameG.off {s : BitVec 64} (h : EvalFrameG s) (k : Nat) (hk : k < 40
     (s + 18446744073709550528#64 + BitVec.ofNat 64 k).toNat = s.toNat - 1088 + k :=
   toNat_frame_off rfl (by have := h.lo; omega) (by have := h.hi; omega)
 
+open Lean Meta Elab Tactic in
+elab "with_frame " t:tacticSeq : tactic => do
+  let mut hs := #[]
+  let mut g ← getMainGoal
+  let some hf := (← g.getDecl).lctx.findDecl? fun d =>
+      if d.type.isAppOfArity ``EvalFrameG 1 then some d.toExpr else none | evalTactic t
+  let s := (← g.withContext (inferType hf)).appArg!
+  for d in (← g.getDecl).lctx do
+    let_expr Eq _ l _ := ← instantiateMVars d.type | continue
+    unless l.isAppOfArity ``VsaIris.Sym.ldv 3 do continue
+    let_expr HAdd.hAdd _ _ _ _ b k := l.appArg! | continue
+    let_expr HSub.hSub _ _ _ _ t c := b | continue
+    unless c.nat? == some 1088 && k.nat?.isSome && t.isAppOfArity ``BitVec.toNat 2 && t.appArg! == s do
+      continue
+    let (h, g') ← g.withContext do
+      let n := mkNatLit k.nat?.get!
+      let hk ← mkDecideProof (← mkAppM ``LT.lt #[n, mkNatLit 4096])
+      let r ← g.rewrite d.type (← mkAppM ``EvalFrameG.off #[hf, n, hk]) (symm := true)
+      (← g.assert d.userName r.eNew (← mkEqMP r.eqProof d.toExpr)).intro1P
+    g := g'; hs := hs.push h
+  replaceMainGoal [g]
+  evalTactic t
+  setGoals (← (← getGoals).mapM fun g => hs.foldrM (fun h g => (g.clear h) <|> pure g) g)
+
+theorem StackGeom.evalFrame {s : BitVec 64} {n : Nat} (h : StackGeom s n) (hn : 1088 ≤ n) :
+    EvalFrameG s := by
+  have := h.le; have h2 := h.lo; have h3 := h.hi; simp only [Vsa.Sim.LayoutInstance.stackSL] at h2 h3
+  exact ⟨toNat_frame rfl (by omega), by omega, h3, h.al⟩
+
+theorem StackGeom.lowerEval {s : BitVec 64} {n : Nat} (h : StackGeom s n) (hn : 1088 ≤ n) :
+    StackGeom (s + 18446744073709550528#64) (n - 1088) := by
+  have hf := (h.evalFrame hn).sf; have := h.le; have := h.lo; have := h.hi; have := h.al; have := h.top
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> rw [hf] <;> omega
+
 abbrev closureKeep : List Nat := [2, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
 
 def closureExit (status : Status) : BitVec 64 :=

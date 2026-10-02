@@ -22,8 +22,7 @@ macro_rules
     (hs1 : 0x87800000 + 48 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0) :
     IW live ∅ [] (nplF s) Q nativePrintlnPC (upd rv 1 r) M
   by
-    have hsf : (s + 18446744073709551568#64).toNat = s.toNat - 48 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551568#64).toNat = s.toNat - 48 := toNat_frame rfl (by omega)
     unfold nativePrintlnPC
     sym_run1 hlive using [h2, hsf] at 0x80002f90
 
@@ -69,8 +68,7 @@ theorem nplFrame_split {s : BitVec 64} (hs : 48 + nativePrintNeed ≤ s.toNat) :
   have h := stackScratch_frame (GF := GF) (s := s) (f := 48#64) (n := nativePrintlnNeed)
     (by unfold nativePrintlnNeed; omega) (by unfold nativePrintlnNeed; simp)
   have hsm : s - 48#64 = s + 18446744073709551568#64 := by rw [BitVec.sub_eq_add_neg]; rfl
-  have e : (s + 18446744073709551568#64).toNat = s.toNat - 48 := by
-    rw [BitVec.toNat_add]; simp; omega
+  have e : (s + 18446744073709551568#64).toNat = s.toNat - 48 := toNat_frame rfl (by omega)
   rw [hsm, show (48#64 : BitVec 64).toNat = 48 from rfl,
     show nativePrintlnNeed - 48 = nativePrintNeed by unfold nativePrintlnNeed; omega] at h
   refine h.trans ?_
@@ -90,8 +88,7 @@ theorem nplFrame_join {s : BitVec 64} (hs : 48 + nativePrintNeed ≤ s.toNat) :
   have h := stackScratch_unframe (GF := GF) (s := s) (f := 48#64) (n := nativePrintlnNeed)
     (by unfold nativePrintlnNeed; omega) (by unfold nativePrintlnNeed; simp)
   have hsm : s - 48#64 = s + 18446744073709551568#64 := by rw [BitVec.sub_eq_add_neg]; rfl
-  have e : (s + 18446744073709551568#64).toNat = s.toNat - 48 := by
-    rw [BitVec.toNat_add]; simp; omega
+  have e : (s + 18446744073709551568#64).toNat = s.toNat - 48 := toNat_frame rfl (by omega)
   rw [hsm, show (48#64 : BitVec 64).toNat = 48 from rfl,
     show nativePrintlnNeed - 48 = nativePrintNeed by unfold nativePrintlnNeed; omega] at h
   refine .trans ?_ h
@@ -146,8 +143,7 @@ theorem npl_rest (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   unfold nativePrintlnNeed nativePrintNeed printNeed fprintfNeed at hs1
   have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
     unfold codeRes; simp [dataOf]
-  have e48 : (s + 18446744073709551568#64).toNat = s.toNat - 48 := by
-    rw [BitVec.toNat_add]; simp; omega
+  have e48 : (s + 18446744073709551568#64).toNat = s.toNat - 48 := toNat_frame rfl (by omega)
 
   ihave ⟨%img, %M1, %hok, Hms, Hio, %⟨hM1, hio, hd⟩⟩ := ms_ioOpen $$ [$]
   have hio1 := ldv_impMem
@@ -292,8 +288,7 @@ theorem npl_geom {s : BitVec 64} (h : StackGeom s nativePrintlnNeed) :
   have hs1 := h.le; have hs2 := h.lo; have hs3 := h.hi; have hs4 := h.al
   simp only [Vsa.Sim.LayoutInstance.stackSL] at hs2 hs3
   unfold nativePrintlnNeed nativePrintNeed printNeed fprintfNeed at hs1 hs2
-  have e48 : (s + 18446744073709551568#64).toNat = s.toNat - 48 := by
-    rw [BitVec.toNat_add]; simp; omega
+  have e48 : (s + 18446744073709551568#64).toNat = s.toNat - 48 := toNat_frame rfl (by omega)
   have a1 : nativePrintNeed ≤ s.toNat - 48 := by unfold nativePrintNeed printNeed fprintfNeed; omega
   have a2 : 0x87800000 ≤ s.toNat - 48 - nativePrintNeed := by
     unfold nativePrintNeed printNeed fprintfNeed; rw [Nat.sub_sub]; exact hs2
@@ -322,8 +317,7 @@ theorem nativePrintln_spec (hlive : ∀ q ∈ interpText, live q.1) (hcl : CodeL
       by omega, hs4, hsg.top, hg⟩
   have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
     unfold codeRes; simp [dataOf]
-  have e48 : (s + 18446744073709551568#64).toNat = s.toNat - 48 := by
-    rw [BitVec.toNat_add]; simp; omega
+  have e48 : (s + 18446744073709551568#64).toNat = s.toNat - 48 := toNat_frame rfl (by omega)
   ihave ⟨Hst, Hslot, HF⟩ := nplFrame_split (s := s)
     (by unfold nativePrintNeed printNeed fprintfNeed; omega) $$ Hst
   ihave ⟨%M, Hms⟩ := ms_intro $$ [$]
