@@ -63,13 +63,6 @@ theorem CallSaved.slotWrite {Mt : Mem} {s ret v8 v9 v18 : BitVec 64}
     CallSaved (slotWrite Mt a w0 w1 w2) s ret v8 v9 v18 :=
   ((h.store w0 (by omega)).store w1 (by omega)).store w2 (by omega)
 
-theorem stackGeom_evalSP {s : BitVec 64} {n : Nat} (hsg : StackGeom s n) (h : 1088 ≤ n)
-    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088) :
-    StackGeom (s + 18446744073709550528#64) (n - 1088) := by
-  have h1 := hsg.le; have h2 := hsg.lo; have h3 := hsg.hi; have h4 := hsg.al; have h5 := hsg.top
-  refine ⟨by rw [hsf]; omega, by rw [hsf]; omega, by rw [hsf]; omega, by rw [hsf]; omega,
-    by rw [hsf]; omega⟩
-
 theorem CallAt.of_untouched {R : Nat → BitVec 64} {Mt Mt2 : Mem} {s aX sret inp ret : BitVec 64}
     {rv : Nat → BitVec 64} {w0 w1 w2 : BitVec 64} {argc : Nat}
     (hU : Untouched (InExt (s.toNat - 1088, 1088)) (argsW s) Mt2 Mt)
@@ -139,19 +132,14 @@ open VsaIris.Inst Vsa.RuntimeRepr
   obtain ⟨aF, hn, hrf, haF⟩ := callNode_of_repr hrepr hgeo
   have hneed : 1088 ≤ evalNeed (.call f args) d := by
     have := Expr.stackNeed_ge (.call f args); unfold evalNeed stackBudget; unfold evalFrame at this; omega
-  have hs := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
-  unfold Vsa.Sim.LayoutInstance.stackSL at hs hs2
-  simp only at hs hs2
-  have hs' : 0x87800000 + 1088 ≤ s.toNat := by omega
-  have hsF : s - 1088#64 = s + 18446744073709550528#64 := evalSP_eq s
-  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := by
-    rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
+  have hfg := hsg.evalFrame (by omega); have hsf := hfg.sf; geom_open
+  have hsF := evalSP_eq s
   have gF := evalCallGeom (o := 96) hsg
     (by have := evalNeed_call_fn f args d; unfold evalFrame at this; omega) (by decide) (by decide)
   obtain ⟨hbf, hba⟩ := Expr.bodiesBound_call hbb
   have hFt : (BitVec.ofNat 64 aF).toNat = aF := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt haF]
   have hx1 := hn.lo; have hx2 := hn.hi; have hx3 := hn.off
-  have hoff := evalSP_off (s := s) hsf (by omega)
+  have hoff := evalSP_off' hfg
   ihave ⟨Hst, HF⟩ := stackScratch_frame (f := 1088#64) hsg.le hneed $$ Hst
   rw [hsF, hsf, show (1088#64).toNat = 1088 from rfl]
   ihave ⟨%Mt0, Hms⟩ := ms_intro $$ [Hpc Hra Hregs HF]
@@ -163,7 +151,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   · icombine Hcode Hro Hfb Hst Hw Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   unfold evalEntryPC
-  refine Call_run1 hlive hsf hs' hs2 hs3 hx1 hx2 hx3 (by ix_reg; exact hregs.a0)
+  refine Call_run1 hlive hfg ⟨hx1, hx2, hx3⟩ (by ix_reg; exact hregs.a0)
     (by ix_reg; exact hregs.a1) (by ix_reg; exact hregs.a2) (by ix_reg; exact hregs.a3)
     (by ix_reg; exact hregs.sp) hn.kind hn.kindu hn.callee ?_
   intros
@@ -202,7 +190,7 @@ open VsaIris.Inst Vsa.RuntimeRepr
   intro F'
   have hsmall := hn.small
   have hct : (BitVec.ofNat 64 args.length).toInt = args.length := ofNat_toInt_small hsmall
-  refine Call_run2 (aE := aE) hlive hsf hs' hs2 hs3 hx1 hx2 hx3 ?_ ?_ hn.cnt ?_ ?_ ?_ ?_
+  refine Call_run2 (aE := aE) hlive hfg ⟨hx1, hx2, hx3⟩ ?_ ?_ hn.cnt ?_ ?_ ?_ ?_
   · ix_keep [hkeep1]
   · ix_keep [hkeep1]
   · rw [show s.toNat - 1088 = (s + 18446744073709550528#64 + 0#64).toNat by rw [BitVec.add_zero, hsf]]
@@ -258,8 +246,8 @@ open VsaIris.Inst Vsa.RuntimeRepr
   have hhead : ArgsHead R2 s aX (BitVec.ofNat 64 inp) aE 0 args.length :=
     ⟨hr2, hr8, hr18, by subst hR2; ix_reg, by subst hR2; ix_reg <;> rfl, hr15⟩
   iapply ha Φ k 0 f args [] aX aE s R2 Mt2 (evalNeed (.call f args) d - 1088) hne
-    List.drop_zero.symm rfl hlen hhead ⟨hsf, hs', hs2, hs3⟩
-    (stackGeom_evalSP hsg hneed hsf) hall
+    List.drop_zero.symm rfl hlen hhead hfg
+    (hsg.lowerEval hneed) hall
   iframe Hms Hcode Hast Hfb Hst Hw
   isplitl []
   · unfold argVals; iempintro

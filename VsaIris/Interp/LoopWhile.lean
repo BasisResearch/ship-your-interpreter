@@ -106,7 +106,6 @@ theorem whileStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ i
   iintro ⟨Hms, #Hcode, #Hast, Hk⟩
   ihave ⟨%P, %m, %⟨hrepr, hgeo⟩, #Hro⟩ := astSG_elim _ _ $$ Hast
   obtain ⟨pc, pb, hn, hrc, -, hpc, -⟩ := whileNode_of_repr hrepr hgeo
-  have hPt : (BitVec.ofNat 64 pc).toNat = pc := by rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpc]
   ihave #Hdv := roOwn_data hn.view $$ [$]
   iapply wp_swpF Wp
   rotate_left
@@ -119,7 +118,7 @@ theorem whileStage (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ i
   iintro ⟨⟨#Hro, Hk⟩, Hms⟩
   iapply Hk $$ %_ %(BitVec.ofNat 64 pc) %⟨⟨by ix_reg, by ix_reg; exact hh.s1, by ix_reg,
     by ix_reg; exact hh.s3, by ix_reg; exact hh.sp⟩, by keep_upd⟩ [] Hms
-  imodintro; rw [hPt]; iapply astEG_of_view hrc hgeo $$ Hro
+  imodintro; rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hpc]; iapply astEG_of_view hrc hgeo $$ Hro
 
 theorem whileCopy (Wp : MachWP (GF := GF) (vsaModel live)) (hlive : ∀ p ∈ interpText, live p.1)
     (htr : ⊢ ∀ p v, valueTruthySpec (GF := GF) (vsaModel live) N Wp p v)

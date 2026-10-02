@@ -294,20 +294,18 @@ theorem wp_call_reallocNull (hlive : AllocLive live)
         heapRes vsaLayoutP vsaRoomB (ρ.plus c) H))
     (Q := fun _ => iprop(∃ p', VsaIris.a0 ↦ᵣ p' ∗ VsaIris.sp ↦ᵣ R 2 ∗ clobbered vsaClob ∗
         savedOwn (savedOf R) ∗ stackScratch (R 2) allocHeadroom ∗ mallocRes ρ H (R 11).toNat p'))
-  · iintro ⟨Ha0, Hsp, Hcl, Hsv, #Hgp, Hstk, Hh⟩
+  · unfold clobberedArg regsOf
+    iintro ⟨Ha0, Hsp, Hcl, Hsv, #Hgp, Hstk, Hh⟩
     rw [h10]
     iframe Ha0 Hsp Hgp Hsv Hstk Hh
     isplitr; ipureintro; exact ⟨hsp, hi4⟩
-    unfold clobberedArg
     iexists R
-    unfold regsOf
     iframe Hcl
     ipureintro; rfl
   · iintro ⟨%p', Ha0, Hsp, Hcl, Hsv, Hstk, Hres⟩
     iexists p'
     iframe Ha0 Hsp Hcl Hsv Hstk Hres
-  isplitl []; iexact Hi; isplitl []; iexact Hs
-  iframe Hpc HR Hgp Hstk Hh
+  iframe Hi Hs Hpc HR Hgp Hstk Hh
   iintro %R' %p' %hR' Hpc HR ⟨Hstk, Hres⟩
   iapply Hk $$ %R' %p' %hR' Hpc HR Hstk Hres
 
@@ -353,47 +351,31 @@ theorem wp_call_reallocOpt (hlive : AllocLive live)
   have h11n : (R 11).toNat = nNew := by rw [h11, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
   cases ob with
   | none =>
-    have h0 : R 10 = 0#64 := BitVec.eq_of_toNat_eq (by rw [h10]; rfl)
-    iapply wp_call_reallocNull hlive Wp hexec hi4 ρ H c (R := R) (by rw [h11n]; exact hc) h0 hsp
+    iapply wp_call_reallocNull hlive Wp hexec hi4 ρ H c (R := R) (by rw [h11n]; exact hc)
+      (BitVec.eq_of_toNat_eq h10) hsp
     simp only [Option.toList_none, List.nil_append]
     iframe Hi Hat Hgp Hpc HR Hstk Hh
     iintro %R' %p' %hR' Hpc HR Hstk Hres
     iapply Hk $$ %R' %p' %hR' Hpc HR Hstk
-    unfold mallocRes reallocOptRes
-    rw [h11n]
-    simp only [Option.toList_none, List.nil_append]
+    unfold mallocRes reallocOptRes obOwn blockOwn blockOwnAt
+    simp only [h11n, Option.toList_none, List.nil_append]
     icases Hres with (⟨%h, Hh⟩ | ⟨%hf, Hh, Hb⟩)
-    · ileft
-      iframe Hh
-      isplitl []; ipureintro; exact h
-      unfold obOwn; iempintro
+    · ileft; iframe Hh %h
     · iright
-      iframe Hh
-      isplitl []; ipureintro; exact hf
-      unfold blockOwn
       ihave ⟨%v, Hb⟩ := ownSet_fn _ $$ Hb
+      iframe Hh %hf
       iexists v
-      unfold blockOwnAt
       iframe Hb
-      ipureintro
-      intro k hk; simp [obLen] at hk
+      ipureintro; intro k hk; simp [obLen] at hk
   | some b =>
     obtain ⟨bp, bn⟩ := b
     simp only [obPtr, obLen] at h10 hlt
-    have hb : ((R 10).toNat, bn) = (bp, bn) := by rw [h10]
     iapply wp_call_realloc hlive Wp hexec hi4 ρ H bn nNew old c hc (R := R) h11 hsp hlt (by omega)
-    iframe Hi Hat Hgp Hpc HR Hstk
-    rw [hb]
-    simp only [Option.toList_some, List.singleton_append]
-    isplitl [Hh]; iexact Hh
-    isplitl [Hob]
-    · unfold obOwn; rw [h10]; iexact Hob
+    unfold reallocRes reallocOptRes obOwn
+    simp only [h10, Option.toList_some, List.singleton_append, obPtr, obLen]
+    iframe Hi Hat Hgp Hpc HR Hstk Hh Hob
     iintro %R' %p' %hR' Hpc HR Hstk Hres
-    iapply Hk $$ %R' %p' %hR' Hpc HR Hstk
-    unfold reallocRes reallocOptRes
-    rw [h10]
-    simp only [Option.toList_some, List.singleton_append, obOwn, obPtr, obLen]
-    iexact Hres
+    iapply Hk $$ %R' %p' %hR' Hpc HR Hstk Hres
 
 end Calls
 

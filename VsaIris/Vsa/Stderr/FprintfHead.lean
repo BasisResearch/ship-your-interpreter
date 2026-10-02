@@ -57,7 +57,7 @@ structure FprLoop (R : Nat → BitVec 64) (M Mt : Mem) (s p ra : BitVec 64) (C :
       (outS s 4096) Q t 0x8000a9b0#64 R' Mt') :
     SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs (outS s 4096) Q t
       0x800061c0#64 R Mt by
-  nx_runB hlive using [h1, h2, h10, h11, h12, hDt, BitVec.add_assoc] at 0x8000a884
+  nx_runB hlive using [h1, h2, h10, h11, h12, hDt, BitVec.add_assoc] at 0x8000a884 #steps 18
 
 #ix_piece fprintfHead_02 from fprintfHead_01 by
   refine vfpEntry_run (hlive := hlive) (t := t) (s := s) (need := 4096) (hs3 := hs3) (hs4 := hs4)

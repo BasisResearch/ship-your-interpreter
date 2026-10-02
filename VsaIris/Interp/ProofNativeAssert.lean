@@ -22,8 +22,7 @@ theorem na_arity {n : Nat} (hn : n = 1 ∨ n = 2) :
     (hn : n = 1 ∨ n = 2) :
     IW live ∅ [] (npF s args n) Q nativeAssertPC (upd rv 1 r) M
   by
-    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := toNat_frame rfl (by omega)
     unfold nativeAssertPC
     sym_run1 hlive using [h12, h2, hsf] at 0x80002e1c
     all_goals first
@@ -41,8 +40,7 @@ theorem na_arity {n : Nat} (hn : n = 1 ∨ n = 2) :
     (hw2 : ldv .ld M (args + 16#64).toNat = w2) :
     IW live ∅ [] (npF s args n) Q 0x80002e1c#64 R M
   by
-    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := toNat_frame rfl (by omega)
     sym_run1 hlive using [h13, h2, hsf, hw0, hw1, hw2] at 0x80002e44
 
 theorem na_arity_bad {n : Nat} (hn : ¬ (n = 1 ∨ n = 2)) (hn2 : n < 2 ^ 31) :
@@ -74,8 +72,7 @@ theorem na_arity_bad {n : Nat} (hn : ¬ (n = 1 ∨ n = 2)) (hn2 : n < 2 ^ 31) :
     (hn : ¬ (n = 1 ∨ n = 2)) (hn2 : n < 2 ^ 31) :
     IW live ∅ [] (npF s args n) Q nativeAssertPC (upd rv 1 r) M
   by
-    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := toNat_frame rfl (by omega)
     unfold nativeAssertPC
     sym_run1 hlive using [h12, h2, hsf] at 0x80002e90
     all_goals first
@@ -89,8 +86,7 @@ theorem na_arity_bad {n : Nat} (hn : ¬ (n = 1 ∨ n = 2)) (hn2 : n < 2 ^ 31) :
     (hs1 : 0x87800000 + 80 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0) :
     IW live ∅ [] (npF s args n) Q 0x80002e48#64 R M
   by
-    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := toNat_frame rfl (by omega)
     sym_run1 hlive using [h2, hsf] at 0x80002e58
 
 #ix_seg na_epi {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -115,8 +111,7 @@ theorem na_arity_bad {n : Nat} (hn : ¬ (n = 1 ∨ n = 2)) (hn2 : n < 2 ^ 31) :
     (ha : ldv .ld M (s.toNat - 80) = args) (hc8 : ldv .ld M (s.toNat - 80 + 8) = 1#64) :
     IW live ∅ [] (npF s args n) Q 0x80002e48#64 R M
   by
-    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := toNat_frame rfl (by omega)
     have hs8 : (s + 18446744073709551536#64 + 8#64).toNat = s.toNat - 80 + 8 := by
       rw [BitVec.toNat_add, hsf]; simp; omega
     sym_run1 hlive using [h2, h10, hsf, hs8, ha, hc8] at 0x80002ebc
@@ -136,8 +131,7 @@ theorem na_arity_bad {n : Nat} (hn : ¬ (n = 1 ∨ n = 2)) (hn2 : n < 2 ^ 31) :
     (hk : ldv .lw M (args + 24#64).toNat = 3#64) (hp : ldv .ld M (args + 32#64).toNat = pw) :
     IW live ∅ [] (npF s args n) Q 0x80002e48#64 R M
   by
-    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := toNat_frame rfl (by omega)
     have hs8 : (s + 18446744073709551536#64 + 8#64).toNat = s.toNat - 80 + 8 := by
       rw [BitVec.toNat_add, hsf]; simp; omega
     sym_run1 hlive using [h2, h10, hsf, hs8, ha, hc8, hk, hp] at 0x80002ebc
@@ -159,8 +153,7 @@ theorem na_arity_bad {n : Nat} (hn : ¬ (n = 1 ∨ n = 2)) (hn2 : n < 2 ^ 31) :
     (hk : ldv .lw M (args + 24#64).toNat = kw) (hk3 : kw ≠ 3#64) :
     IW live ∅ [] (npF s args n) Q 0x80002e48#64 R M
   by
-    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := toNat_frame rfl (by omega)
     have hs8 : (s + 18446744073709551536#64 + 8#64).toNat = s.toNat - 80 + 8 := by
       rw [BitVec.toNat_add, hsf]; simp; omega
     sym_run1 hlive using [h2, h10, hsf, hs8, ha, hc8, hk] at 0x80002ebc
@@ -357,8 +350,7 @@ theorem na_rtErr (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   iintro ⟨%hR, #Hcode, #Himg, Hms, Hst, Hrd, #Hjb, Hw, Hsl, #Hv, Hab⟩
   obtain ⟨hR10, hR11, hR12, hR13, hR14, hR2, hargs⟩ := hR
   unfold nativeAssertNeed RtErr.rtErrNeed snprintfNeed at hs1
-  have e80 : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
-    rw [BitVec.toNat_add]; simp; omega
+  have e80 : (s + 18446744073709551536#64).toNat = s.toNat - 80 := toNat_frame rfl (by omega)
   have hsp : SpIn (s + 18446744073709551536#64) RtErr.rtErrNeed :=
     ⟨by rw [e80]; unfold RtErr.rtErrNeed snprintfNeed Vsa.Sim.tohostAddr; omega,
       by rw [e80]; omega, by rw [e80]; omega⟩
@@ -579,8 +571,7 @@ theorem na_head (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String →
   have hoff : ∀ k, k < 80 → (s + 18446744073709551536#64 + BitVec.ofNat 64 k).toNat =
       s.toNat - 80 + k := by
     intro k hk; rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
-  have e80 : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
-    rw [BitVec.toNat_add]; simp; omega
+  have e80 : (s + 18446744073709551536#64).toNat = s.toNat - 80 := toNat_frame rfl (by omega)
   have eA : ∀ k, k < 24 → (args + BitVec.ofNat 64 k).toNat = args.toNat + k := by
     intro k hk
     rw [BitVec.toNat_add, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (show k < 2 ^ 64 by omega),

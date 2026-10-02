@@ -419,3 +419,36 @@ omega below ~40 hypotheses; the front end and `omega_dc` sites keep it where it 
   statements move whenever a tactic gets faster; a pc-based stop would make them stable.
 * Out of this round's scope: the boot witnesses' `decide +kernel` (435 s tactic, 238 s kernel), and
   Vsa/Sim (−1.8%: few tactic-issued calls).
+
+## 13. Deterministic stops
+
+`nx_runB` (VsaIris/Vsa/Stdout/Tac.lean) was the only driver that stopped on heartbeats: once a run had
+used 55% of `maxHeartbeats` it parked every open goal where it stood, so the `#ix_piece` statements of
+the stderr runs were a function of tactic speed (§10's 9 changed pieces). `ixRunCore` (Interp/ITac.lean)
+had the same check behind a `budgetPct` argument no caller set; `xrun`, `sym_run`, StepGen and
+AllocTac read the clock only for traces. StepGen's `withCurrHeartbeats` (lemma generation charged to
+nobody) is kept.
+
+Now `nx_runB` takes a mandatory stop, `nx_runB … [at pcs] #steps K`: the run stops after K steps (a
+step is one goal taken off the work list), or earlier at an `at` pc or where no step lemma applies.
+The 55% budget only decides when to fail: if it is used up before the stop, the tactic throws "run
+did not reach its stop point within budget: j steps taken, stop point #steps K", tagged as a runtime
+heartbeat error so `try`/`first` cannot swallow it and fall back to a shorter piece. `ixRunCore`'s
+budget check fails the same way. The stderr macros (`fwrite_step/mid/tail`, `sprint_step/mid`,
+`swsetup_step`, `vfperr_step`) take K as an argument (`fwrite_tail 38`).
+
+All 45 `nx_runB` sites (6 inline, 39 through the 7 macros, in Stderr/FwriteRun, SprintErr, SwsetupErr,
+VfpErr, VfpEntry, FprintfHead) state K = the steps the run takes at 8f4bb737; adding a K equal to
+the run's own count does not change what the run does. At 8f4bb737 no run hit the budget any more
+(round 10 made them fast enough; the highest is `fwriteErr_01`, 87 steps at 45% of the budget), so
+freezing them needed no budget-stopped state replayed. 36 of the 45 take 1 step (the goal is already
+at the `at` pc, or no step applies: the leftovers of the old budget-stopped chains); the rest are
+`fwriteErr_01` 87, `_08` 30, `_16` 38, `sprintErr_01` 49, `_06` 24, `swsetupErr_01` 50,
+`vfpErr_01` 33, `vfpErr_02` 6, `fprintfHead_01` 18.
+
+Checked: type hash of every `Vsa*` constant (auxiliaries excluded) against 8f4bb737: 0 theorem
+statements changed, all 55 stderr pieces identical; the only differences are the meta code itself
+(`nxRunCore`'s signature, the renamed syntax kinds, `runOverBudget`/`throwRunBudget`). A copy of
+`fwriteErr_01` under a lowered budget fails with the message above, also inside `try`. Module CPU
+(single file, min of 2): ITac 4.19 → 3.65 s, Tac 4.37 → 3.92 s, the six stderr files 74.2 → 73.4 s.
+Axioms unchanged (14 lines), no `sorry`.

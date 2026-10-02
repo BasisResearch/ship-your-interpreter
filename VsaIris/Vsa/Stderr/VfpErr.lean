@@ -21,8 +21,8 @@ structure VfpHead (R R' : Nat → BitVec 64) : Prop where
 
 set_option hygiene false in
 
-macro "vfperr_step" : tactic => `(tactic| (nx_runB hlive using [h2, h8, h20, hsinit, hflU, hflS, hmode,
-  hlock, hfd, hbase, BitVec.add_assoc, BitVec.zero_add] at 0x8000f230 0x8000a944))
+macro "vfperr_step" k:num : tactic => `(tactic| (nx_runB hlive using [h2, h8, h20, hsinit, hflU, hflS, hmode,
+  hlock, hfd, hbase, BitVec.add_assoc, BitVec.zero_add] at 0x8000f230 0x8000a944 #steps $k))
 
 #ix_piece vfpErr_01 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
@@ -40,7 +40,7 @@ macro "vfperr_step" : tactic => `(tactic| (nx_runB hlive using [h2, h8, h20, hsi
       (outS s need) Q t 0x8000a944#64 R' (vfpErrMt Mt sp)) :
     SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs (outS s need) Q t
       0x8000a8d0#64 R Mt by
-  nx_win sp 384 592; vfperr_step
+  nx_win sp 384 592; vfperr_step 33
 
 #ix_piece vfpErr_02 from vfpErr_01 by
   refine swsetupErr_run (hlive := hlive) (t := t) (s := s) (need := need) (hs3 := hs3) (hs4 := hs4)
@@ -50,7 +50,7 @@ macro "vfperr_step" : tactic => `(tactic| (nx_runB hlive using [h2, h8, h20, hsi
   all_goals try carry_close [h2, hsinit, hfd, hbase]
   nx_ret hR
   nx_runB hlive using [rk1, rk2, rk8, rk9, rk10, rk18, rk19, rk20, rk21, rk22, rk23, rk24, rk25, rk26,
-    rk27, h2, h8, h20, BitVec.add_assoc, BitVec.zero_add] at 0x8000a944
+    rk27, h2, h8, h20, BitVec.add_assoc, BitVec.zero_add] at 0x8000a944 #steps 6
   refine hk _ ⟨?_, ?_, ?_, ?_, ?_⟩ <;> carry_close [rk2, rk8, rk20, rk22, h2, h8, h20, rk9, rk18, rk19, rk21,
     rk23, rk24, rk25, rk26, rk27]
 

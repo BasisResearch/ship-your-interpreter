@@ -76,10 +76,10 @@ structure VfpEntry (R R' : Nat → BitVec 64) (Mt Mt' : Mem) (sp : BitVec 64) : 
   xrun [14] hlive using [h1, h10, h11, h12, h13, hdec, BitVec.reduceSub, BitVec.reduceHShiftLeft] at 0x8000a8d0
 
 #ix_piece vfpEntry_02 from vfpEntry_01 by
-  nx_runB hlive using [h1, h10, h11, h12, h13, hdec, BitVec.reduceSub, BitVec.reduceHShiftLeft] at 0x8000a8d0
+  nx_runB hlive using [h1, h10, h11, h12, h13, hdec, BitVec.reduceSub, BitVec.reduceHShiftLeft] at 0x8000a8d0 #steps 1
 
 #ix_piece vfpEntry_03 from vfpEntry_02 by
-  nx_runB hlive using [h1, h10, h11, h12, h13, hdec, BitVec.reduceSub, BitVec.reduceHShiftLeft] at 0x8000a8d0
+  nx_runB hlive using [h1, h10, h11, h12, h13, hdec, BitVec.reduceSub, BitVec.reduceHShiftLeft] at 0x8000a8d0 #steps 1
 
 #ix_piece vfpEntry_04 from vfpEntry_03 by
   have e592 : R 2 + 18446744073709551024#64 = R 2 - 592#64 := by

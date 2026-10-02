@@ -40,11 +40,6 @@ structure SlotWin (a : Nat) : Prop where
   htif : htifLo + 16 ≤ a
   align : a % 8 = 0
 
-structure RamWin (a n : Nat) : Prop where
-  lo : 0x80000000 ≤ a
-  hi : a + n ≤ 0x100000000
-  htif : a + n ≤ htifLo ∨ htifLo + 16 ≤ a
-
 def Regime.plus : Regime → Nat → Regime
   | .counted k, c => .counted (k + c)
   | .uncounted, _ => .uncounted

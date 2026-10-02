@@ -83,10 +83,6 @@ theorem seqz_sub (x y : BitVec 64) :
 abbrev veqS (pa pb s : BitVec 64) (x : Nat) : Prop :=
   (InExt (pa.toNat, 24) x ∨ InExt (pb.toNat, 24) x) ∨ InExt (s.toNat - 16, 16) x
 
-macro_rules
-  | `(tactic| sx_side) =>
-    `(tactic| (intro b hb; simp only [mem_accAddrs_iff, veqS, VsaIris.InExt] at *; sx_addr))
-
 theorem veq_close (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IProp GF}
     {N : NativeAddrs} {pa pb s r : BitVec 64} {a b : Value} {st : Store} {B : List (Nat × Nat)}
     {rv R : Nat → BitVec 64} {M Ma Mb : Mem}
@@ -336,8 +332,7 @@ theorem veq_str_run2 (c : VeqCtx live pa pb s r rv M Ma Mb) {x1 x2 : String} {R'
   have hs1 := c.hsg.le; have hs2 := c.hsg.lo; have hs3 := c.hsg.hi; have hs4 := c.hsg.al
   unfold Vsa.Sim.LayoutInstance.stackSL at hs2 hs3
   simp only at hs2 hs3
-  have hsa : (s + 18446744073709551600#64).toNat = s.toNat - 16 := by
-    rw [BitVec.toNat_add]; simp; omega
+  have hsa : (s + 18446744073709551600#64).toNat = s.toNat - 16 := toNat_frame rfl (by omega)
   have hsa8 : (s + 18446744073709551600#64 + 8#64).toNat = s.toNat - 8 := by
     rw [BitVec.toNat_add, hsa]; simp; omega
   have hsp : s + 18446744073709551600#64 + 16#64 = s := by

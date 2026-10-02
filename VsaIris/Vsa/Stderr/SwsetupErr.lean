@@ -16,8 +16,8 @@ abbrev swsetupErrMt (Mt : Mem) (sp ra : BitVec 64) : Mem :=
 
 set_option hygiene false in
 
-macro "swsetup_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11, hDt, hsinit,
-  hflU, hflS, hfd, hbase, BitVec.add_assoc, BitVec.zero_add, ldv_ld_and_640, BitVec.reduceXOr]))
+macro "swsetup_step" k:num : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h11, hDt, hsinit,
+  hflU, hflS, hfd, hbase, BitVec.add_assoc, BitVec.zero_add, ldv_ld_and_640, BitVec.reduceXOr] #steps $k))
 
 #ix_piece swsetupErr_01 {live : Nat → Prop} {Dt : Mem} {DA : List Nat}
     {Q : String → (Nat → BitVec 64) → (Nat → BitVec 8) → Prop}
@@ -36,10 +36,10 @@ macro "swsetup_step" : tactic => `(tactic| (nx_runB hlive using [h1, h2, h10, h1
         (swsetupErrMt Mt sp ra)) :
     SWPO live (stdioText ++ dataOf Dt (accAddrs 0x8001b970 8 ++ DA)) iRegs (outS s need) Q t
       0x8000f230#64 R Mt by
-  nx_win sp 384 0; swsetup_step
+  nx_win sp 384 0; swsetup_step 50
 
 #ix_piece swsetupErr_02 from swsetupErr_01 by
-  swsetup_step
+  swsetup_step 1
 
 #ix_piece swsetupErr_03 from swsetupErr_02 by
   nx_compactR

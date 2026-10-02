@@ -35,10 +35,6 @@ abbrev npF (s args : BitVec 64) (n : Nat) (k : Nat) : Prop :=
 
 abbrev npS (s args : BitVec 64) (n : Nat) (k : Nat) : Prop := npF s args n k ∨ ioW k
 
-macro_rules
-  | `(tactic| sx_side) =>
-    `(tactic| (intro b hb; simp only [mem_accAddrs_iff, npS, npF, ioW, VsaIris.InExt] at *; sx_addr))
-
 section Vals
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
@@ -222,8 +218,7 @@ end Vals
     (hn : 0 < n) (hn2 : n < 2 ^ 31) :
     IW live ∅ [] (npF s args n) Q nativePrintPC (upd rv 1 r) M
   by
-    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := toNat_frame rfl (by omega)
     have hnI : (BitVec.ofNat 64 n).toInt = (n : Int) := by
       rw [BitVec.toInt_eq_toNat_cond]; simp; omega
     have h0I : (0#64 : BitVec 64).toInt = 0 := by decide
@@ -243,8 +238,7 @@ end Vals
     IW live ∅ [] (npF s args n) Q nativePrintPC (upd rv 1 r) M
   by
     subst hn
-    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := toNat_frame rfl (by omega)
     unfold nativePrintPC
     sym_run1 hlive using [h10, h12, h13, h2, hsf] at 0x80002f64
 
@@ -264,8 +258,7 @@ end Vals
     (hio2 : ldv .ld M 0x8001b548 = 0x8001bb20#64) :
     IW live impMem (accAddrs 0x8001b970 8) (npS s args n) Q 0x80002f1c#64 R M
   by
-    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
-      rw [BitVec.toNat_add]; simp; omega
+    have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := toNat_frame rfl (by omega)
     sym_run1 hlive using [h8, h9, h18, h2, hsf, ea, hw0, hw1, hw2, hio1, hio2] at 0x80002f44
 
 #ix_seg np_more {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
@@ -645,8 +638,7 @@ theorem np_A (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String → IP
   iintro ⟨⟨Hrest, Hcon, Hio⟩, Hms⟩
   have hsm : s - 80#64 = s + 18446744073709551536#64 := by
     rw [BitVec.sub_eq_add_neg]; rfl
-  have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := by
-    rw [BitVec.toNat_add]; simp; omega
+  have hsf : (s + 18446744073709551536#64).toNat = s.toNat - 80 := toNat_frame rfl (by omega)
   have e8 : (s + 18446744073709551536#64 + 8#64).toNat = s.toNat - 80 + 8 := by
     rw [BitVec.toNat_add, hsf]; simp; omega
   have e16 : (s + 18446744073709551536#64 + 16#64).toNat = s.toNat - 80 + 16 := by

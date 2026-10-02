@@ -221,8 +221,6 @@ theorem def_epi {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {s : Na
   have hsp := hstk.sp
   obtain ⟨hr1, hr8, hr9, hr18, hr19, hr20, hr21, hr22⟩ := hstk.restore (by omega) hs'
   sx_run hl
-  iterate 8
-    · intro b hb; have hb' := of_mem_accAddrs hb; apply hS <;> sx_addr
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; rw [hr1]; exact hra
   refine hk _ _ _ ⟨hr1, rfl, ⟨?_, ?_, ?_⟩⟩
   · simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false]; exact hr1
@@ -428,7 +426,6 @@ theorem def_grow1 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : 
   have := hw.lo; have := hw.hi; have := hw.htif; have := hw.align
   have h4 : (R 20 + 4#64).toNat = e + 4 := by rw [BitVec.toNat_add, he]; simp; omega
   sx_run hl at 0x80002ba0
-  · intro b hb; have hb' := of_mem_accAddrs hb; apply hS <;> sx_addr
   refine hk _ _ _ ⟨rfl, by rw [h4], by simp [upd_apply], fun k hk => by simp [upd_apply, hk]⟩
 
 theorem def_grow2 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : Nat → Prop}
@@ -450,8 +447,6 @@ theorem def_grow2 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : 
   have hlv : ldv .ld Mt (e + 16) = BitVec.ofNat 64 pv := by
     rw [ldv_ld_img]; unfold imgW; rw [hpv]
   sx_run hl at 0x80002bbc
-  iterate 3
-    · intro b hb; have hb' := of_mem_accAddrs hb; apply hS <;> sx_addr
   have h24 : ((BitVec.ofNat 64 cap <<< 1 + BitVec.ofNat 64 cap) <<< 3) =
       BitVec.ofNat 64 (24 * cap) := slot24_index cap
   refine hk _ _ _ ⟨rfl, by rw [h8], ?_, ?_, ?_, fun k h10 h11 h15 => by
@@ -482,8 +477,6 @@ theorem def_grow3 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : 
     · intro h; have := congrArg BitVec.toNat h; simp at this; omega
     · intro h; rw [h]
   sx_run hl at 0x80002bd0 0x80002b1c
-  iterate 2
-    · intro b hb; have hb' := of_mem_accAddrs hb; apply hS <;> sx_addr
   · intro hc
     simp only [upd_apply, Nat.reduceEqDiff, ite_true, ite_false, hlp, hp1n] at hc
     exact hk _ _ _ ⟨by rw [h16], fun k hk => by simp [upd_apply, hk], .inr ⟨.inl hc, rfl⟩⟩
@@ -569,7 +562,6 @@ theorem def_app4 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : N
   have := wn.lo; have := wn.hi; have := wn.htif; have := wn.align
   have := wv.lo; have := wv.hi; have := wv.htif; have := wv.align
   have := wp.lo; have := wp.hi; have := wp.htif; have := wp.align
-  have hS' : ∀ a, e ≤ a → a < e + 32 → S a := fun a h1 h2 => hS a (.inl ⟨h1, h2⟩)
   have h8 : (R 20 + 8#64).toNat = e + 8 := by rw [BitVec.toNat_add, he]; simp; omega
   have h16 : (R 20 + 16#64).toNat = e + 16 := by rw [BitVec.toNat_add, he]; simp; omega
   have hlc : ldv .lw Mt (R 20).toNat = BitVec.ofNat 64 n := by
@@ -578,31 +570,19 @@ theorem def_app4 {live : Nat → Prop} (hl : ∀ p ∈ envText, live p.1) {S : N
     rw [h8, ldv_ld_img]; unfold imgW; rw [hpn]
   have hlv : ldv .ld Mt (R 20 + 16#64).toNat = BitVec.ofNat 64 pv := by
     rw [h16, ldv_ld_img]; unfold imgW; rw [hpv]
-  have hSp : ∀ a, vp ≤ a → a < vp + 24 → S a := fun a h1 h2 => hS a (.inr (.inr (.inr ⟨h1, h2⟩)))
   sx_run hl at 0x80002b70
-  iterate 6
-    · intro b hb; have hb' := of_mem_accAddrs hb
-      first | (apply hS' <;> sx_addr) | (apply hSp <;> sx_addr)
   rw [hlc, hln, hlv, shl3_small n (by omega), ← BitVec.ofNat_add, slot24_index n]
   generalize hA : BitVec.ofNat 64 (pn + 8 * n) = A
   have hAn : A.toNat = pn + 8 * n := by
     rw [← hA, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
   clear hA
-  have hSn : ∀ a, pn + 8 * n ≤ a → a < pn + 8 * n + 8 → S a :=
-    fun a h1 h2 => hS a (.inr (.inl ⟨h1, h2⟩))
   sx_run hl at 0x80002b7c
-  · intro b hb; have hb' := of_mem_accAddrs hb; apply hSn <;> sx_addr
   rw [← BitVec.ofNat_add]
   generalize hB : BitVec.ofNat 64 (pv + 24 * n) = B
   have hBn : B.toNat = pv + 24 * n := by
     rw [← hB, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
   clear hB
-  have hSv : ∀ a, pv + 24 * n ≤ a → a < pv + 24 * n + 24 → S a :=
-    fun a h1 h2 => hS a (.inr (.inr (.inl ⟨h1, h2⟩)))
   sx_run hl at 0x80002aec
-  iterate 4
-    · intro b hb; have hb' := of_mem_accAddrs hb
-      first | (apply hSv <;> sx_addr) | (apply hS' <;> sx_addr)
   have hB8 : (B + 8#64).toNat = pv + 24 * n + 8 := by rw [BitVec.toNat_add, hBn]; simp; omega
   have hB16 : (B + 16#64).toNat = pv + 24 * n + 16 := by rw [BitVec.toNat_add, hBn]; simp; omega
   have hv8 : (R 21 + 8#64).toNat = vp + 8 := by rw [BitVec.toNat_add, hvp]; simp; omega

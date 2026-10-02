@@ -129,29 +129,16 @@ theorem dispResL_of_argVals (N : NativeAddrs) (hd : DispSupply (GF := GF) N) (s 
     (B : List (Nat × Nat)) (img : Nat → BitVec 8) (base : Nat) :
     ∀ (vs : List Value) (i : Nat),
       storeRepr (GF := GF) N s B ∗ argVals N img base i vs ⊢ storeRepr N s B ∗ dispResL s vs
-  | [], _ => by
-    iintro ⟨Hs, -⟩
-    iframe Hs
-    unfold dispResL; simp only [sepL_nil]; iempintro
+  | [], _ => .rfl
   | v :: vs, i => by
-    unfold dispResL argVals
-    simp only [sepL_cons]
+    unfold argVals dispResL
     iintro ⟨Hs, #Hv, #Hvs⟩
-    ihave ⟨Hs, #Hd⟩ := (show iprop(storeRepr N s B ∗ valImg N img (base + 24 * i) v) ⊢
-        iprop(storeRepr N s B ∗ dispRes s v) from by
-      cases v with
-      | closure ca =>
-        unfold valImg valOf
-        iintro ⟨Hs, ⟨-, #Hc⟩⟩
-        iapply (hd s B ca _) $$ [$]
-      | _ =>
-        iintro ⟨Hs, -⟩
-        iframe Hs
-        unfold dispRes; iempintro) $$ [$]
     ihave ⟨Hs, #Hds⟩ := dispResL_of_argVals N hd s B img base vs (i + 1) $$ [$]
-    iframe Hs Hd
-    unfold dispResL at *
-    iexact Hds
+    rw [sepL_cons]; unfold dispResL at *; iframe Hds
+    cases v <;> unfold valImg <;> try (unfold dispRes; iframe Hs; done)
+    unfold valOf
+    icases Hv with ⟨-, #Hc⟩
+    iapply (hd s B _ _) $$ [$]
 
 end Vals
 
@@ -217,32 +204,22 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
 
 #ix_seg CallN_run1 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
-    {aX s w0 w1 w2 : BitVec 64}
-    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
-    (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
-    (hx1 : 0x80000000 ≤ aX.toNat) (hx2 : aX.toNat + 28 ≤ 0x100000000)
-    (hx3 : aX.toNat + 28 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aX.toNat)
+    {aX s w0 w1 w2 : BitVec 64} (hfg : EvalFrameG s) (hx : RamWin aX.toNat 28)
     (h8 : R 8 = aX) (h2 : R 2 = s + 18446744073709550528#64)
-    (hW0 : ldv .ld Mt (s + 18446744073709550528#64 + 96#64).toNat = w0)
-    (hW1 : ldv .ld Mt (s + 18446744073709550528#64 + 104#64).toNat = w1)
-    (hW2 : ldv .ld Mt (s + 18446744073709550528#64 + 112#64).toNat = w2)
-    (hK : ldv .lw Mt (s + 18446744073709550528#64 + 96#64).toNat = 5#64) :
+    (hW0 : ldv .ld Mt (s.toNat - 1088 + 96) = w0) (hW1 : ldv .ld Mt (s.toNat - 1088 + 104) = w1)
+    (hW2 : ldv .ld Mt (s.toNat - 1088 + 112) = w2) (hK : ldv .lw Mt (s.toNat - 1088 + 96) = 5#64) :
     IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003254#64 R Mt
-  by sym_run hlive using [h8, h2, hW0, hW1, hW2, hK, hsf] at 0x800039f4
+  by with_frame with_geom sym_run hlive using [h8, h2, hW0, hW1, hW2, hK, hfg.sf] at 0x800039f4
 
 #ix_seg CallN_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
-    {s ret v8 v9 v18 v23 : BitVec 64} {DA : List Nat}
-    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
-    (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
+    {s ret v8 v9 v18 v23 : BitVec 64} {DA : List Nat} (hfg : EvalFrameG s)
     (hal : ret.toNat % 4 = 0)
     (h2 : R 2 = s + 18446744073709550528#64)
-    (hRA : ldv .ld Mt (s + 18446744073709550528#64 + 1080#64).toNat = ret)
-    (hS0 : ldv .ld Mt (s + 18446744073709550528#64 + 1072#64).toNat = v8)
-    (hS1 : ldv .ld Mt (s + 18446744073709550528#64 + 1064#64).toNat = v9)
-    (hS2 : ldv .ld Mt (s + 18446744073709550528#64 + 1056#64).toNat = v18)
-    (hS7 : ldv .ld Mt (s + 18446744073709550528#64 + 1016#64).toNat = v23) :
+    (hRA : ldv .ld Mt (s.toNat - 1088 + 1080) = ret) (hS0 : ldv .ld Mt (s.toNat - 1088 + 1072) = v8)
+    (hS1 : ldv .ld Mt (s.toNat - 1088 + 1064) = v9) (hS2 : ldv .ld Mt (s.toNat - 1088 + 1056) = v18)
+    (hS7 : ldv .ld Mt (s.toNat - 1088 + 1016) = v23) :
     IW live m DA (InExt (s.toNat - 1088, 1088)) Q 0x800039f8#64 R Mt
-  by sym_run hlive using [h2, hRA, hS0, hS1, hS2, hS7, hsf, hal]
+  by with_frame with_geom sym_run hlive using [h2, hRA, hS0, hS1, hS2, hS7, hfg.sf, hal]
 
 end VsaIris.Interp

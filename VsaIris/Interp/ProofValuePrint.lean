@@ -278,22 +278,12 @@ theorem vp_native (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     outSpec_Q ?hX (by cases f <;> rfl) c.hMa
   case hvs =>
     intro i h
-    simp only [List.length_cons, List.length_nil] at h
-    rcases i with _ | _ | _ | i
-    · simp [upd]
-    · ix_reg; rfl
-    · ix_reg; rfl
-    · omega
+    rcases i with _ | _ | _ | i <;> first | (simp at h; omega) | (ix_reg; rfl) | simp [upd]
   case hX =>
-    iintro ⟨#Hv, -, -, -⟩
-    unfold fprintfOut
-    iright; iright
-    iexists nativeName f
-    isplitr
-    · ipureintro; exact ⟨rfl, rfl⟩
-    unfold valImg valOf
-    icases Hv with ⟨-, #H⟩
-    iexact H
+    unfold fprintfOut valImg valOf
+    iintro ⟨⟨-, #H⟩, -, -, -⟩
+    iright; iright; iexists nativeName f
+    iframe H; ipureintro; exact ⟨rfl, rfl⟩
 
 theorem str_fn : "<fn>".toList = ['<', 'f', 'n', '>'] := by decide
 
@@ -416,7 +406,8 @@ theorem roOwn_clod {img : Nat → BitVec 8} {P : Nat → Prop} {m : Mem} {cp q :
         ⌜(∀ k, cp ≤ k → k < cp + 8 → imgM Dt k = img k) ∧
           ∀ k, q + 8 ≤ k → k < q + 16 → m[k]? = some (imgM Dt k)⌝ := by
   classical
-  iintro ⟨#Hc, #H1, #H2⟩
+  unfold codeRes roOwn dataOf
+  iintro ⟨⟨#Hgp, #Htx⟩, #H1, #H2⟩
   ihave %hag := roImg_roOn_agree $$ [$]
   let f : Nat → BitVec 8 := fun k => if cp ≤ k ∧ k < cp + 16 then img k else (m[k]?).getD 0
   obtain ⟨Dt, hDt⟩ := exists_mem_img f (clodA cp q)
@@ -432,12 +423,9 @@ theorem roOwn_clod {img : Nat → BitVec 8} {P : Nat → Prop} {m : Mem} {cp q :
     · simp only [f, hin, ite_false]; rw [hb]; rfl
   iexists Dt
   isplitl
-  · unfold codeRes roOwn at *
-    icases Hc with ⟨#Hgp, #Htx⟩
-    iframe Hgp
+  · iframe Hgp
     iapply (sepL_append _ _ _).2
     iframe Htx
-    unfold dataOf
     rw [sepL_map]
     iapply (sepL_append _ _ _).2
     isplitl

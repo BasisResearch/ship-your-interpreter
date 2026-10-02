@@ -264,15 +264,16 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have h2 : (R 2).toNat = C.s.toNat - 64 := hR.stack.sp
   have hlay := hR.lay
   have hew := hlay.envWin
-  have hsb := hlay.sblk
   have := hew.lo; have := hew.hi; have := hew.htif; have := hew.align
+  have hsb := hlay.sblk
   have hcl := hlay.cap_lt
   have hfull := hR.full
-  have hc'lt := lt_nextCap f.vars.length
   have hc'ev := nextCap_even f.vars.length
+  have hvcl := hlay.vcap_lt
   have hc'cs : (f.vars.length = 0 ∧ nextCap f.vars.length = 8) ∨
       (0 < f.vars.length ∧ nextCap f.vars.length = 2 * f.vars.length) := by
     unfold nextCap; split <;> omega
+  have hc'lt := lt_nextCap f.vars.length
 
   have hcost : nameCopyCost C.x + arrayReallocCost (nextCap f.vars.length) =
       nameCopyCost C.x + 24 * nextCap f.vars.length + 8 * nextCap f.vars.length := by
@@ -288,13 +289,12 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   iframe Ht Hgp Hpc HR H0
   iintro %pc1 %R1 %Mt1 %⟨rfl, rfl, h10, hk1⟩ Hpc HR H0
 
+  have hob : ∀ {b c : Nat × Nat}, obOf G.cap b = some c → G.cap ≠ 0 ∧ c = b := fun h => by
+    unfold obOf at h; split at h; · cases h
+    exact ⟨‹_›, (Option.some.inj h).symm⟩
   have hobN : ∀ b, obOf G.cap G.nblk = some b → b ∈ H := fun b hb => by
-    by_cases h0 : G.cap = 0
-    · simp [obOf, h0] at hb
-    · simp only [obOf, h0, ite_false, Option.some.injEq] at hb
-      subst hb
-      exact hBH _ (List.mem_append_left _ (List.mem_append_right _
-        (by simp [FrameGeom.blocks, h0])))
+    obtain ⟨h0, rfl⟩ := hob hb
+    exact hBH _ (List.mem_append_left _ (List.mem_append_right _ (by simp [FrameGeom.blocks, h0])))
   have hpn : (R1 10).toNat = obPtr (obOf G.cap G.nblk) := by
     rw [h10, hR.arr]
     by_cases h0 : G.cap = 0
@@ -327,10 +327,8 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   ihave ⟨%Hx, Hh, %hHx, Hrest1⟩ := reallocOptRes_heap $$ Hres1
   have e2 : ∀ k, k = 2 ∨ k = 8 ∨ k = 9 ∨ k = 18 ∨ k = 19 ∨ k = 20 ∨ k = 21 ∨ k = 22 → R2 k = R k :=
     fun k hk => by
-      have ha : k ∉ VsaIris.ra :: 10 :: vsaClob := by
-        rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide
-      have hb : k ≠ 10 := by rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide
-      rw [hk2 k ha, hk1 k hb]
+      rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+        rw [hk2 _ (by decide), hk1 _ (by decide)]
 
   have hcap1 : imgLE (imgM (writeLog Mt [(G.e + 4, 4, R 15)])) (G.e + 4) 4 =
       nextCap f.vars.length := by
@@ -344,19 +342,14 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   iframe Ht Hgp Hpc HR H0
   iintro %pc3 %R3 %Mt2 %⟨rfl, rfl, h10v, h11v, h15v, hk3⟩ Hpc HR H0
 
-  have hvcl := hlay.vcap_lt
   have hobV : ∀ b, obOf G.cap G.vblk = some b → b ∈ obRest (obOf G.cap G.nblk) H := fun b hb => by
-    by_cases h0 : G.cap = 0
-    · simp [obOf, h0] at hb
-    · simp only [obOf, h0, ite_false, Option.some.injEq] at hb
-      subst hb
-      obtain ⟨-, -, dnv⟩ := hlay.apart h0
-      have hn0 : 0 < G.nblk.2 := by rw [(hlay.arrays (by omega)).1]; simp only; omega
-      refine obRest_sub (hBH _ (List.mem_append_left _ (List.mem_append_right _
-        (by simp [FrameGeom.blocks, h0])))) fun b hb heq => ?_
-      simp only [obOf, h0, ite_false, Option.some.injEq] at hb
-      subst hb
-      exact dnv G.nblk.1 ⟨Nat.le_refl _, by omega⟩ (by rw [heq]; exact ⟨Nat.le_refl _, by omega⟩)
+    obtain ⟨h0, rfl⟩ := hob hb
+    obtain ⟨-, -, dnv⟩ := hlay.apart h0
+    have hn0 : 0 < G.nblk.2 := by rw [(hlay.arrays (by omega)).1]; simp only; omega
+    refine obRest_sub (hBH _ (List.mem_append_left _ (List.mem_append_right _
+      (by simp [FrameGeom.blocks, h0])))) fun b hb heq => ?_
+    obtain ⟨-, rfl⟩ := hob hb
+    exact dnv G.nblk.1 ⟨Nat.le_refl _, by omega⟩ (by rw [heq]; exact ⟨Nat.le_refl _, by omega⟩)
   have hpv : (R3 10).toNat = obPtr (obOf G.cap G.vblk) := by
     rw [h10v]
     by_cases h0 : G.cap = 0
@@ -390,11 +383,8 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
 
   have e4 : ∀ k, k = 2 ∨ k = 8 ∨ k = 9 ∨ k = 18 ∨ k = 19 ∨ k = 20 ∨ k = 21 ∨ k = 22 → R4 k = R k :=
     fun k hk => by
-      have ha : k ∉ VsaIris.ra :: 10 :: vsaClob := by
-        rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide
-      have hb : k ≠ 10 ∧ k ≠ 11 ∧ k ≠ 15 := by
-        rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide
-      rw [hk4 k ha, hk3 k hb.1 hb.2.1 hb.2.2, e2 k hk]
+      rw [hk4 k (by rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide), hk3 k
+        (by omega) (by omega) (by omega), e2 k hk]
   have hp1i : imgLE (imgM (writeLog (writeLog Mt [(G.e + 4, 4, R 15)]) [(G.e + 8, 8, R2 10)]))
       (G.e + 8) 8 = p1.toNat := by
     rw [← imgW_toNat, ← ldv_ld_img, ldv_store_hit, h10p]
@@ -409,11 +399,9 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
         [(G.e + 16, 8, R4 10)]) a = imgM Mt a := fun a ha => by
     rw [imgM_store_miss _ _ (by omega), imgM_store_miss _ _ (by omega),
       imgM_store_miss _ _ (by omega)]
-  have hstr : ∀ a, (a < G.e + 4 ∨ G.e + 24 ≤ a) → frameS G (G.e + 4) := fun _ _ => by
-    unfold frameS InExt; left; omega
-  have hsepO := hR.sepOut (G.e + 4) (hstr 0 (.inl (by omega)))
+  have hsepO := hR.sepOut (G.e + 4) (by unfold frameS InExt; left; omega)
   have hsepO' := hR.sepOut (G.e + 23) (by unfold frameS InExt; left; omega)
-  have hsepS := hR.sepStk (G.e + 4) (hstr 0 (.inl (by omega)))
+  have hsepS := hR.sepStk (G.e + 4) (by unfold frameS InExt; left; omega)
   have hsepS' := hR.sepStk (G.e + 23) (by unfold frameS InExt; left; omega)
   have hslot3 : ∀ a, C.vp.toNat ≤ a → a < C.vp.toNat + 24 →
       imgM (writeLog (writeLog (writeLog Mt [(G.e + 4, 4, R 15)]) [(G.e + 8, 8, R2 10)])
@@ -580,19 +568,11 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
       rw [hbl'] at hb
       simp only [List.mem_append, List.mem_cons, List.not_mem_nil, _root_.or_false] at hb
       have hv0 : ∀ c, obOf G.cap G.vblk = some c → c ∈ G.blocks ∧ 0 < c.2 := fun c hc => by
-        by_cases h0 : G.cap = 0
-        · simp [obOf, h0] at hc
-        · simp only [obOf, h0, ite_false, Option.some.injEq] at hc
-          subst hc
-          refine ⟨by simp [FrameGeom.blocks, h0], ?_⟩
-          rw [(hlay.arrays (by omega)).2]; simp only; omega
+        obtain ⟨h0, rfl⟩ := hob hc
+        exact ⟨by simp [FrameGeom.blocks, h0], by rw [(hlay.arrays (by omega)).2]; simp only; omega⟩
       have hn0 : ∀ c, obOf G.cap G.nblk = some c → c ∈ G.blocks ∧ 0 < c.2 := fun c hc => by
-        by_cases h0 : G.cap = 0
-        · simp [obOf, h0] at hc
-        · simp only [obOf, h0, ite_false, Option.some.injEq] at hc
-          subst hc
-          refine ⟨by simp [FrameGeom.blocks, h0], ?_⟩
-          rw [(hlay.arrays (by omega)).1]; simp only; omega
+        obtain ⟨h0, rfl⟩ := hob hc
+        exact ⟨by simp [FrameGeom.blocks, h0], by rw [(hlay.arrays (by omega)).1]; simp only; omega⟩
       rcases hb with (hb | hb | hb | hb) | hb
       ·
         exact hstep b (obRest_sub (hBH b (List.mem_append_left _ (List.mem_append_left _ hb)))
@@ -604,17 +584,11 @@ theorem def_grow (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
         have hsin : G.sblk ∈ B₁ ++ G.blocks ++ B₂ :=
           List.mem_append_left _ (List.mem_append_right _ (by simp [FrameGeom.blocks]))
         refine hstep _ (obRest_sub (hBH _ hsin) fun c hc heq => ?_) fun c hc heq => ?_
-        · by_cases h0 : G.cap = 0
-          · simp [obOf, h0] at hc
-          · simp only [obOf, h0, ite_false, Option.some.injEq] at hc
-            subst hc
-            exact (hlay.apart h0).1 G.sblk.1 ⟨Nat.le_refl _, by omega⟩
+        · obtain ⟨h0, rfl⟩ := hob hc
+          exact (hlay.apart h0).1 G.sblk.1 ⟨Nat.le_refl _, by omega⟩
               (by rw [← heq]; exact ⟨Nat.le_refl _, by omega⟩)
-        · by_cases h0 : G.cap = 0
-          · simp [obOf, h0] at hc
-          · simp only [obOf, h0, ite_false, Option.some.injEq] at hc
-            subst hc
-            exact (hlay.apart h0).2.1 G.sblk.1 ⟨Nat.le_refl _, by omega⟩
+        · obtain ⟨h0, rfl⟩ := hob hc
+          exact (hlay.apart h0).2.1 G.sblk.1 ⟨Nat.le_refl _, by omega⟩
               (by rw [← heq]; exact ⟨Nat.le_refl _, by omega⟩)
       ·
         subst hb

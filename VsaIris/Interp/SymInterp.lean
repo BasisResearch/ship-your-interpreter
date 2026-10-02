@@ -1,5 +1,6 @@
 import VsaIris.Vsa.SymExec
 import VsaIris.Interp.ITac
+import VsaIris.Vsa.FootKey
 
 /-!
 # The symbolic route for `IW` runs
@@ -874,7 +875,7 @@ def symRunCore (explore : Bool) (fuel : Nat) (h : Syntax) (facts : Array Term) (
     List.not_mem_nil, false_implies, implies_true, and_true, AFact.holds, SE.den, reduceCtorEq,
     Option.some.injEq, forall_eq', List.mem_append, mem_accAddrs_iff', Nat.mod_one, forall_const,
     BitVec.add_zero, upd_apply, Nat.reduceEqDiff, ite_true, ite_false, $lems,*, *] <;> and_intros <;>
-    (try intros) <;> first | exact True.intro |
+    (try intros) <;> first | exact True.intro | foot_key |
       (have _htoh : tohostAddr = 0x8001ad00 := rfl; omega)))
   let proveGeom (gg : MVarId) : TacticM Bool := do
     let saved ← saveState
@@ -986,4 +987,40 @@ elab_rules : tactic
   | `(tactic| sym_run $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => symRunTac true n h fs stops
   | `(tactic| sym_run1 $[[$n]]? $h $[using [$fs,*]]? $[at $stops*]?) => symRunTac false n h fs stops
 
+open Lean Meta Elab Tactic in
+def geomOpen : TacticM (Array FVarId) := withMainContext do
+  let recs := [`VsaIris.Interp.EvalFrameG, `VsaIris.Interp.StackGeom, `VsaIris.Interp.SlotGeom,
+    `VsaIris.Interp.ArgsGeom, `VsaIris.Interp.SlotWin, `VsaIris.Interp.RamWin,
+    `VsaIris.Interp.StrWin, `VsaIris.Interp.BlockWin, `VsaIris.Newlib.RtErr.InpGeom]
+  let mut g ← getMainGoal
+  let mut hs := #[]
+  for d in ← getLCtx do
+    let some c := (← instantiateMVars d.type).getAppFn.constName? | continue
+    unless !d.isImplementationDetail && recs.contains c do continue
+    let some info := getStructureInfo? (← getEnv) c | continue
+    for f in info.fieldNames do
+      let p ← mkProjection d.toExpr f
+      let t := (← inferType p).replace fun e =>
+        if e.isConstOf `VsaIris.Interp.htifLo then some (mkConst `Vsa.Sim.tohostAddr) else none
+      let (h, g') ← (← g.assert .anonymous t p).intro1
+      g := g'; hs := hs.push h
+  replaceMainGoal [g]
+  return hs
+
+open Lean Meta Elab Tactic in
+elab "geom_open" : tactic => discard geomOpen
+
+open Lean Meta Elab Tactic in
+elab "with_geom " t:tacticSeq : tactic => do
+  let hs ← geomOpen
+  evalTactic t
+  let gs ← getGoals
+  setGoals (← gs.mapM fun g => hs.foldrM (fun h g => (g.clear h) <|> pure g) g)
+
 end VsaIris.SymExec.Interp
+
+namespace VsaIris.Sym
+
+macro_rules | `(tactic| sx_side) => `(tactic| foot_key)
+
+end VsaIris.Sym

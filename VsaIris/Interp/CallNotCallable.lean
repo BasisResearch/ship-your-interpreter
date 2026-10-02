@@ -10,19 +10,14 @@ open Vsa.MemRepr Vsa.Sim Vsa.While
 
 #ix_seg CallX_run1 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
-    {aX s w0 w1 w2 : BitVec 64} {k : Nat}
-    (hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088)
-    (hs : 0x87800000 + 1088 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
-    (hx1 : 0x80000000 ≤ aX.toNat) (hx2 : aX.toNat + 28 ≤ 0x100000000)
-    (hx3 : aX.toNat + 28 ≤ tohostAddr ∨ tohostAddr + 16 ≤ aX.toNat)
+    {aX s w0 w1 w2 : BitVec 64} {k : Nat} (hfg : EvalFrameG s) (hx : RamWin aX.toNat 28)
     (h8 : R 8 = aX) (h2 : R 2 = s + 18446744073709550528#64)
-    (hW0 : ldv .ld Mt (s + 18446744073709550528#64 + 96#64).toNat = w0)
-    (hW1 : ldv .ld Mt (s + 18446744073709550528#64 + 104#64).toNat = w1)
-    (hW2 : ldv .ld Mt (s + 18446744073709550528#64 + 112#64).toNat = w2)
-    (hK : ldv .lw Mt (s + 18446744073709550528#64 + 96#64).toNat = BitVec.ofNat 64 k)
+    (hW0 : ldv .ld Mt (s.toNat - 1088 + 96) = w0) (hW1 : ldv .ld Mt (s.toNat - 1088 + 104) = w1)
+    (hW2 : ldv .ld Mt (s.toNat - 1088 + 112) = w2)
+    (hK : ldv .lw Mt (s.toNat - 1088 + 96) = BitVec.ofNat 64 k)
     (hk5 : BitVec.ofNat 64 k ≠ 5#64) (hk4 : BitVec.ofNat 64 k ≠ 4#64) :
     IW live m (callView aX.toNat) (InExt (s.toNat - 1088, 1088)) Q 0x80003254#64 R Mt
-  by sym_run hlive using [h8, h2, hW0, hW1, hW2, hK, hk5, hk4, hsf] at 0x80003dcc
+  by with_frame with_geom sym_run hlive using [h8, h2, hW0, hW1, hW2, hK, hk5, hk4, hfg.sf] at 0x80003dcc
 
 #ix_seg CallX_run2 {live : Nat → Prop} (hlive : ∀ p ∈ interpText, live p.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {m Mt : Mem} {R : Nat → BitVec 64}
@@ -64,14 +59,8 @@ theorem callNotCallable (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (G
       stackScratch (s + 18446744073709550528#64) (n - 1088) ∗ world N L Room inp ρ st2 d ∗
       (abortAt Core s n -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
-  have hs := hsg.lo; have hs2 := hsg.hi; have hs3 := hsg.al; have hs4 := hsg.le
-  unfold Vsa.Sim.LayoutInstance.stackSL at hs hs2
-  simp only at hs hs2
-  have hs' : 0x87800000 + 1088 ≤ s.toNat := by unfold RtErr.rtErrNeed snprintfNeed at hn; omega
-  have hsF : s - 1088#64 = s + 18446744073709550528#64 := evalSP_eq s
-  have hsf : (s + 18446744073709550528#64).toNat = s.toNat - 1088 := by
-    rw [← hsF]; exact toNat_sub_frame (by simp only [BitVec.toNat_ofNat]; omega)
-  have hoff := evalSP_off (s := s) hsf (by omega)
+  have hfg := hsg.evalFrame (by omega); geom_open
+  have hoff := evalSP_off' hfg
   obtain ⟨hk4', hk5, hk4⟩ := notCallable_tag hnc
   iintro ⟨#Hcode, #HE, #Hast, #Hv, Hms, Hst, Hw, Hab⟩
   unfold astEG
@@ -83,12 +72,9 @@ theorem callNotCallable (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (G
   rotate_left
   · icombine Hcode HE Hst Hw Hab as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
-  refine CallX_run1 (k := valTag fv) (w0 := w0) (w1 := w1) (w2 := w2) hlive hsf hs' hs2 hs3
-    hnd.lo hnd.hi hnd.off hcall.s0 hcall.sp ?_ ?_ ?_ ?_ hk5 hk4 ?_
-  · rw [hoff 96 (by decide)]; exact hcall.w0
-  · rw [hoff 104 (by decide)]; exact hcall.w1
-  · rw [hoff 112 (by decide)]; exact hcall.w2
-  · rw [hoff 96 (by decide)]; exact ldv_lw_of_ld hcall.w0 htag (by omega)
+  refine CallX_run1 (k := valTag fv) (w0 := w0) (w1 := w1) (w2 := w2) hlive hfg
+    ⟨hnd.lo, hnd.hi, hnd.off⟩ hcall.s0 hcall.sp hcall.w0 hcall.w1 hcall.w2
+    (ldv_lw_of_ld hcall.w0 htag (by omega)) hk5 hk4 ?_
   intro vl _ _
   apply swp_closeRM
   intro R1 Mt1 hR1 hMt1
