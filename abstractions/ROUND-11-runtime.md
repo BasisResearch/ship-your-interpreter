@@ -373,3 +373,28 @@ PC's records bought nothing on the fresh cases (`def_grow`'s window record `EnvW
 not an `upd` chain). **Forecast for the line layers: 1.5% of the lines of fresh cases**, against 36
 (PD) and 41 (PC) setup lines. The lines of these proofs are spec-specific glue and record bookkeeping;
 an agent's cleanup pass removes 8–20% of them without any layer.
+
+## 9. Rollout (own worktrees from 933e8337, one owner per layer, per-file +10% bound)
+
+Brief: `~/syi-r11/rollout-brief.md` (layers, per-call costs of every reused tactic (E57), owners of
+the shared functions (E62), the bound). Merged by the coordinator into `exp-R11-R3` together with
+the fresh-case branch `exp-R11-F` and `origin/exponentiate-next` (e4efc1f1, snapshot 10): no
+conflicts; full `lake build` green (1,562 jobs) at cc110310.
+
+| agent | territory | what did the work | files (+/− non-blank) | measured (base 78f9fb97 → agent) |
+|---|---|---|---|---|
+| R1 keys (owned FootKey/KeyNF, every `sx_side`/`sx_addr` alternative) | the key route | PB's local-chart idea ported into `foot_key` without a datatype: a footprint leaf `S t` closed by any hypothesis `∀ x, P₁ x → … → S x` with premises decided by keys (covers chart hypotheses and disjunctive `hS`); list-membership leaves (`accAddrs`, `++`), literal multipliers, literal powers, reducible `+`/`−` abbrevs (`evalSP`); seven per-file `sx_side` alternatives deleted (every goal they solved, `foot_key` solves; measured per alternative with a spy; BinArm's kept, it solves 2 goals uniquely); new `foot_or t` (prove by keys, refute same-atom false goals at once, else `t`) as `ix_fwd`'s and `ix_mem`'s discharger: the false miss-lemma probes `a+8 ≤ a ∨ a+8 ≤ a` and `evalSP` addresses had cost 65–180 ms each on the `sx_addr` route; 20 hand lines in EnvDefineSpans became dead | FootKey +181/−12, Arm +3/−2, SymInterp +3, EnvDefineSpans −20, EnvTac −7, five files −3 each | 62 modules 364.1 → 260.9 s (−28.3%); EnvDefineSpans 39.3 → 11.2, CallPrefix 9.5 → 3.4, LoopFor 14.5 → 10.5, LoopWhile 9.3 → 6.4; `foot_key` 2.1 ms median success, 0.1 ms median failure; `foot_or` 1–2 ms |
+| R2 geometry (owned the PC layer) | run-piece statements, stack geometry | `#ix_seg` pieces take `EvalFrameG s`/`RamWin a n`/`InpGeom` instead of spelled-out windows (Call_run*, CallX/CallN, CallK_runA–D, ArgsLoop_runA/B, three more Clo pieces), users in 12 files updated; `with_frame` (frame-slot loads stated at `s.toNat − 1088 + N`, ≈ 30 `rw [hoff N]` bullets gone); `StackGeom.evalFrame` replaces a 7–8-line derivation in 9 places; `StackGeom.lowerEval` merges two duplicate lemmas; 42 two-line `hsf` proofs → `toNat_frame rfl (by omega)`; `RamWin` moved down to Repr (statement identical) | 24 files, target −199, net −168; setup +31 | layer-attributable ≈ −190 lines, plain cleanup ≈ −10; all changed files within the bound (largest CallCloExit +7.5% in its sweep) |
+| (PD) read-back | – | not rolled out (section 11) | – | – |
+
+Defects the rollout found: (1) `macro_rules` alternatives are ordered by import order, so per-file
+alternatives (EnvScanCore, EnvTac, ITac's `intro b hb; simp … at *; sx_addr`) ran before the generic
+key route at ≈ 9 ms per success, and EnvTac's re-ran the whole `omega` route on every unsolvable goal;
+(2) the same false miss-lemma probes also hit AllocTac's `sx_mem` and ITac's `ix_mem` (do-not-edit
+files: they keep paying); (3) a tactic that replaces a hypothesis inside an `#ix_seg` piece
+(`replaceLocalDecl`) introduces new locals that the continuation is abstracted over, and a later
+`clear` silently fails: such tactics must add copies and clear them; (4) passing a general rewrite
+(`evalSP_off' hfg`) to `sym_run … using` hit the heartbeat limit in simp on one piece and left the
+post-state unnormalised (a changed generated statement) on another; (5) name clashes
+(`StackGeom.lower` already exists for the 176-byte frame) and namespace shadowing (`RtErr.InpGeom`
+under `open Vsa.RuntimeRepr`).
