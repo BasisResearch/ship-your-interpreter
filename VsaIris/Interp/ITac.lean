@@ -113,6 +113,19 @@ def ixStep (norm : Syntax) (h : Syntax) (g : MVarId)
     if let some r ← ixApply norm h g nm false side then used nm; return some r
   return none
 
+def runOverBudget (budgetPct : Nat) : CoreM Bool := do
+  let ctx ← read
+  if budgetPct == 0 || ctx.maxHeartbeats == 0 then return false
+  return ((← IO.getNumHeartbeats) - ctx.initHeartbeats) * 100 > ctx.maxHeartbeats * budgetPct
+
+def throwRunBudget {α : Type} (budgetPct taken : Nat) (limit : Option Nat) : CoreM α := do
+  let stop := match limit with
+    | some k => s!"#steps {k}"
+    | none => "the run's natural end"
+  throw <| .error (← getRef) <| .tagged `runtime.maxHeartbeats
+    m!"run did not reach its stop point within budget: {taken} steps taken, stop point {stop}, \
+      budget {budgetPct}% of maxHeartbeats used"
+
 def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
     (fs : Option (Syntax.TSepArray `term ",")) (stops : Option (Array (TSyntax `num)))
     (pre : List String := ixPre)
@@ -140,15 +153,14 @@ def ixRunCore (explore : Bool) (n : Option (TSyntax `num)) (h : Syntax)
       catch _ => saved.restore; pure first
 
     let mut work : List (MVarId × Nat) := [(first, budget)]
-    let ctx ← readThe Core.Context
+    let mut taken := 0
     while !work.isEmpty do
       let (cur, fuel) := work.head!
       work := work.tail!
       if fuel == 0 then stuck := stuck ++ [cur]; continue
 
-      if budgetPct != 0 && ctx.maxHeartbeats != 0 then
-        let used := (← IO.getNumHeartbeats) - ctx.initHeartbeats
-        if used * 100 > ctx.maxHeartbeats * budgetPct then stuck := stuck ++ [cur]; continue
+      if ← runOverBudget budgetPct then throwRunBudget budgetPct taken none
+      taken := taken + 1
       if let some pc ← cur.withContext (do swpPC? (← cur.getType)) then
         if stopPCs.contains pc then stuck := stuck ++ [cur]; continue
       let some (conts, pend) ← ixStep norm h cur pre | stuck := stuck ++ [cur]; continue
