@@ -45,6 +45,11 @@ structure RamWin (a n : Nat) : Prop where
   hi : a + n ≤ 0x100000000
   htif : a + n ≤ htifLo ∨ htifLo + 16 ≤ a
 
+theorem RamWin.ofEnds {a k : Nat} (h0 : ReadOK a) (h1 : ReadOK (a + k)) (hk : k < 16 := by omega) :
+    RamWin a (k + 1) :=
+  ⟨h0.lo, by have := h1.hi; omega, by
+    have := h0.off; have := h1.off; unfold htifLo; unfold Vsa.Sim.tohostAddr at *; omega⟩
+
 def Regime.plus : Regime → Nat → Regime
   | .counted k, c => .counted (k + c)
   | .uncounted, _ => .uncounted

@@ -168,13 +168,11 @@ macro_rules
     {s p : BitVec 64}
     (h2 : R 2 = s + 18446744073709551504#64)
     (hs1 : 0x87800000 + 112 ≤ s.toNat) (hs2 : s.toNat ≤ 0x88000000) (hs3 : s.toNat % 16 = 0)
-    (hp1 : p.toNat % 8 = 0) (hp2 : 0x8001ad00 + 16 ≤ p.toNat) (hp3 : p.toNat + 24 ≤ 0x100000000)
-    (h10 : R 10 ≠ 0#64) :
+    (hp : SlotGeom p) (h10 : R 10 ≠ 0#64) :
     IW live ∅ [] (sgF s p) Q 0x8000305c#64 R M
   by
-    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := by
-      rw [BitVec.toNat_add]; simp; omega
-    sym_run1 hlive using [h2, hsf] at 0x8000306c
+    have hsf : (s + 18446744073709551504#64).toNat = s.toNat - 112 := toNat_frame rfl (by omega)
+    with_geom sym_run1 hlive using [h2, hsf] at 0x8000306c
 
 #ix_seg sg_epi {live : Nat → Prop} (hlive : ∀ q ∈ interpText, live q.1)
     {Q : (Nat → BitVec 64) → (Nat → BitVec 8) → Prop} {M : Mem} {R : Nat → BitVec 64}
@@ -811,12 +809,11 @@ theorem sg_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   have hq0 : q ≠ 0#64 := fun h => f.hfresh.1.nonzero (by rw [h]; rfl)
   refine sg_run Wp ?_
   intro F'
-  refine sg_copy cx.hlive f.h2 (by omega) hs2 hs3 cx.hg.al
-    (by have := cx.hg.lo; unfold Vsa.Sim.tohostAddr at this; omega) cx.hg.hi (by rw [f.h10]; exact hq0) ?_
+  refine sg_copy cx.hlive f.h2 (by omega) hs2 hs3 cx.hg (by rw [f.h10]; exact hq0) ?_
   intros; apply swp_closeF
   dsimp only [F']
-  have eB : (s + 18446744073709551504#64 + 16#64).toNat = s.toNat - 96 := by
-    rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
+  have hoff : ∀ k, k < 112 → (s + 18446744073709551504#64 + BitVec.ofNat 64 k).toNat =
+      s.toNat - 112 + k := fun _ _ => toNat_frame_off (c := 112) rfl (by omega) (by omega)
   have hsub : ∀ k, InExt (s.toNat - 96, x.toList.length + 1) k → sgF s p k := fun k hk =>
     .inl (by simp only [InExt] at hk ⊢; omega)
   have hsl : ∀ k, sgF s p k ↔ ((sgF s p k ∧ ¬ InExt (s.toNat - 96, x.toList.length + 1) k) ∨
@@ -840,7 +837,7 @@ theorem sg_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
   unfold memcpySpecOwned
   ihave #Hmcs := Hmc0 $$ %q %(s + 18446744073709551504#64 + 16#64) %(x.toList.length + 1) %(imgM M)
   unfold memcpyPC
-  rw [eB]
+  rw [hoff 16 (by omega), show s.toNat - 112 + 16 = s.toNat - 96 by omega]
   iapply (ms_callRegs Wp (i := 0x8000306c)
     ((step% jalx 0x8000306c) live (fun q hq => cx.hlive _ ((interp_code (by decide)) q hq))) (interp_code (by decide))
     (L := [10, 11, 12, 5, 6, 7, 13, 14, 15, 16, 17, 28, 29, 30, 31])
@@ -899,9 +896,6 @@ theorem sg_memcpy (Wp : MachWP (GF := GF) (vsaModel live)) {Φ : Nat × String �
     by_cases h : InExt (s.toNat - 96, x.toList.length + 1) k
     · exact hM2b k h
     · exact hM2a k ⟨hk, h⟩
-  have hoff : ∀ k, k < 112 → (s + 18446744073709551504#64 + BitVec.ofNat 64 k).toNat =
-      s.toNat - 112 + k := by
-    intro k hk; rw [BitVec.toNat_add, BitVec.toNat_add]; simp; omega
   have hld : ∀ o, 16 ≤ o → o + 8 ≤ 112 →
       ldv .ld M2 (s + 18446744073709551504#64 + BitVec.ofNat 64 o).toNat =
       ldv .ld M (s + 18446744073709551504#64 + BitVec.ofNat 64 o).toNat := fun o h1 h2 => by

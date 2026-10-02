@@ -41,6 +41,15 @@ theorem toNat_sub_frame {s f : BitVec 64} (hf : f.toNat ≤ s.toNat) :
   have := s.isLt; have := f.isLt
   omega
 
+theorem toNat_frame {s : BitVec 64} {m c : Nat} (hm : m + c = 18446744073709551616)
+    (hc : c ≤ s.toNat) : (s + BitVec.ofNat 64 m).toNat = s.toNat - c := by
+  rw [BitVec.toNat_add, BitVec.toNat_ofNat]; have := s.isLt; omega
+
+theorem toNat_frame_off {s : BitVec 64} {m c k : Nat} (hm : m + c = 18446744073709551616)
+    (hc : c ≤ s.toNat) (hk : s.toNat - c + k < 18446744073709551616) :
+    (s + BitVec.ofNat 64 m + BitVec.ofNat 64 k).toNat = s.toNat - c + k := by
+  rw [BitVec.toNat_add, toNat_frame hm hc, BitVec.toNat_ofNat]; omega
+
 theorem stackScratch_narrow {s : BitVec 64} {n m : Nat} (hn : n ≤ s.toNat) (hm : m ≤ n) :
     stackScratch (GF := GF) s n ⊢ blockOwn (s.toNat - n) (n - m) ∗ stackScratch s m := by
   unfold stackScratch

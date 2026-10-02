@@ -150,7 +150,7 @@ theorem cloParamStep (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
           ms 0x80003328#64 R' (InExt (s.toNat - 1088, 1088)) Mt' -∗ W (st.define fa x v) rest -∗
           stackScratch (s + 18446744073709550528#64) n -∗ Wp.W Φ))
     ⊢ Wp.W Φ := by
-  have hsf := hfg.sf; have hs := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
+  geom_open
   have hoff := evalSP_off' hfg
   have g0 := hpg _ (hpv 0 (by omega)).1
   have g7 := hpg _ (hpv 7 (by omega)).1
@@ -179,8 +179,7 @@ theorem cloParamStep (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
   · icombine Hcode Hv Hstr HW Hst Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
   refine CloB_runL (pa := R 8) (off := BitVec.ofNat 64 (8 * j)) (qa := s.toNat - 1088 + 240 + 24 * j)
-    (qp := prm.toNat + 8 * j) hlive hsf hs hs2 hs3 hq1 hq2 hq3 g0.lo (by have := g7.hi; omega)
-    (by have := g0.off; have := g7.off; omega) rfl hcl.s5 hcl.a5 hcl.sp hprm hpo hs0 hq8 hq16
+    (qp := prm.toNat + 8 * j) hlive hfg ⟨hq1, hq2, hq3⟩ (.ofEnds g0 g7) rfl hcl.s5 hcl.a5 hcl.sp hprm hpo hs0 hq8 hq16
     (by omega) (by omega) (by omega) ?_
   apply swp_closeRM
   intro R1 Mt1 hR1 hMt1
@@ -274,7 +273,7 @@ theorem cloParamStep (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
   have h2R : R' 2 = s + 18446744073709550528#64 := (hk 2 (by decide) (by decide)).trans h2'
   have h22R : R' 22 = BitVec.ofNat 64 (8 * argc) := by
     rw [hk 22 (by decide) (by decide), hR1]; ix_reg; exact hcl.s6
-  refine CloB_runR (m := ∅) (j := j) (argc := argc) hlive hsf hs hs2 hs3 hj hc h2'' h22'' hO h1024 ?_ ?_
+  refine CloB_runR (m := ∅) (j := j) (argc := argc) hlive hfg hj hc h2'' h22'' hO h1024 ?_ ?_
   · intro hne
     apply swp_closeRM
     intro R3 Mt3 hR3 hMt3
@@ -436,7 +435,6 @@ theorem cloBind (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
         W ((ps.zip vs).foldl (fun t p => t.define fa p.1 p.2) st) [] -∗
         stackScratch (s + 18446744073709550528#64) n -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
-  have hsf := hfg.sf; have hs := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
   have hoff := evalSP_off' hfg
   have hpl := paramsRepr_length hps
   have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
@@ -447,7 +445,7 @@ theorem cloBind (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF)
   · rw [hro]; icombine Hcode Hro Hav HW Hst Hk as HF; isplitl []; iexact Hcode; iframe HF Hms
   intro F'
   have htoI : (BitVec.ofNat 64 argc).toInt = argc := ofNat_toInt_small (by omega)
-  refine CloB_run0 (m := ∅) hlive hsf hs hs2 hs3 hen.a0 hen.sp hen.argcm ?_ ?_
+  refine CloB_run0 (m := ∅) hlive hfg hen.a0 hen.sp hen.argcm ?_ ?_
   ·
     intro hle
     apply swp_closeRM

@@ -52,6 +52,10 @@ structure EvalFrameG (s : BitVec 64) : Prop where
   hi : s.toNat ≤ 0x88000000
   al : s.toNat % 16 = 0
 
+theorem EvalFrameG.off {s : BitVec 64} (h : EvalFrameG s) (k : Nat) (hk : k < 4096 := by decide) :
+    (s + 18446744073709550528#64 + BitVec.ofNat 64 k).toNat = s.toNat - 1088 + k :=
+  toNat_frame_off rfl (by have := h.lo; omega) (by have := h.hi; omega)
+
 abbrev closureKeep : List Nat := [2, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
 
 def closureExit (status : Status) : BitVec 64 :=

@@ -11,10 +11,6 @@ section Partial
 variable {hlc : HasLC} {GF : BundledGFunctors} [G : MachGS hlc GF] [I : InterpGS GF]
 variable {live : Nat → Prop}
 
-theorem hoff' {s : BitVec 64} (hfg : EvalFrameG s) (c : Nat) (hc : c < 4096 := by decide) :
-    (s + 18446744073709550528#64 + BitVec.ofNat 64 c).toNat = s.toNat - 1088 + c :=
-  evalSP_off' hfg c hc
-
 theorem frame_of_slot {s : BitVec 64} {a : Nat} (ha1 : s.toNat - 1088 ≤ a)
     (ha2 : a + 24 ≤ s.toNat - 1088 + 1088) :
     ownSet (GF := GF) (fun k => InExt (s.toNat - 1088, 1088) k ∧ ¬ InExt (a, 24) k) byteAny ∗
@@ -105,7 +101,7 @@ theorem cloExitEsc (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := 
       slot24 (s + 18446744073709550528#64 + 144#64).toNat ∗ world N L Room inp ρ st (d + 1) ∗
       stackScratch (s + 18446744073709550528#64) (n - 1088) ∗ (abortAt Core s n -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
-  have hsf := hfg.sf; have hs := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
+  geom_open
   have hinpG := hE.inpGeom
   have hinpN : (BitVec.ofNat 64 inp).toNat = inp := Nat.mod_eq_of_lt hE.inpLt
   have hi8 : (BitVec.ofNat 64 inp + 8#64).toNat = inp + 8 := by
@@ -137,7 +133,7 @@ theorem cloExitEsc (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := 
     iapply ms_iff (T := fun b => InExt (s.toNat - 1088, 1088) b ∨
       InExt ((BitVec.ofNat 64 inp).toNat + 8, 4) b) (fun k => by rw [hinpN]) $$ Hms
   intro F'
-  refine CloX_runX (m := ∅) (dep := d + 1) hlive hsf hs hs2 hs3 hinpG.lo hinpG.hi
+  refine CloX_runX (m := ∅) (dep := d + 1) hlive hfg hinpG
     (by rw [hinpN]; omega) (by rw [hinpN]; exact hinpA) hat.s2 hat.sp hdl ?_ ?_ ?_
   rotate_left
   · intro hc; exact absurd hc1 hc
@@ -162,8 +158,8 @@ theorem cloExitEsc (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := 
     rw [hMt4, imgLE_congr (n := 4) (img' := imgM (writeLog M3 [((BitVec.ofNat 64 inp + 8#64).toNat, 4,
         BitVec.signExtend 64 (BitVec.extractLsb 31 0 (BitVec.ofNat 64 (d + 1) + 18446744073709551615#64)))]))
       (fun i hi => by
-        rw [imgM_store_miss _ _ (by rw [hoff' hfg 1024]; omega),
-          imgM_store_miss _ _ (by rw [hoff' hfg 1040]; omega)]),
+        rw [imgM_store_miss _ _ (by rw [hfg.off 1024]; omega),
+          imgM_store_miss _ _ (by rw [hfg.off 1040]; omega)]),
       hi8, imgLE_store4_hit, hv]
   ihave Hw := Hcl $$ %d %(imgM Mt4) Hd %⟨hdep4, by omega⟩
   ihave #Himg := errCtx_img inp $$ HE
@@ -189,12 +185,11 @@ theorem cloErrDepth (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
           ⌜imgLE img' (inp + 8) 4 = d' ∧ d' ≤ maxCallDepth⌝ -∗ world N L Room inp ρ st d') ∗
       stackScratch (s + 18446744073709550528#64) (n - 1088) ∗ (abortAt Core s n -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
-  have hsf := hfg.sf; have hs := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
+  geom_open
   have hinpG := hE.inpGeom
   have hinpN : (BitVec.ofNat 64 inp).toNat = inp := Nat.mod_eq_of_lt hE.inpLt
   have hi8 : (BitVec.ofNat 64 inp + 8#64).toNat = inp + 8 := by
-    have := hinpG.hi; rw [hinpN] at this
-    simp only [BitVec.toNat_add, BitVec.toNat_ofNat]; omega
+    have := hinpG.hi; simp only [BitVec.toNat_add, BitVec.toNat_ofNat] at this ⊢; omega
   have hro : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
     unfold codeRes; simp [dataOf]
   iintro ⟨#Hcode, #HE, Hms, Hcl, Hst, Hab⟩
@@ -202,7 +197,7 @@ theorem cloErrDepth (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :=
   rotate_left
   · rw [hro]; icombine Hcode HE Hcl Hst Hab as HF; isplitl []; iexact Hcode; iframe HF Hms
   intro F'
-  refine CloE_runD (m := ∅) hlive hsf hs hs2 hs3 hinpG.lo hinpG.hi (by rw [hinpN]; omega)
+  refine CloE_runD (m := ∅) hlive hfg hinpG (by rw [hinpN]; omega)
     (by rw [hinpN]; exact hinpA) hdp.s2 hdp.sp ?_
   apply swp_closeRM
   intro R4 Mt4 hR4 hMt4
@@ -615,7 +610,7 @@ theorem cloErrArity (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String
       stackScratch (s + 18446744073709550528#64) (n - 1088) ∗
       (abortAt Core s n -∗ (wpW (vsaModel live)).W Φ)
     ⊢ (wpW (vsaModel live)).W Φ := by
-  have hsf := hfg.sf; have hs := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
+  geom_open
   have hinpN : (BitVec.ofNat 64 inp).toNat = inp := Nat.mod_eq_of_lt hE.inpLt
   have hro0 : roOwn (GF := GF) roR (interpText ++ dataOf ∅ []) = codeRes := by
     unfold codeRes; simp [dataOf]
@@ -635,8 +630,7 @@ theorem cloErrArity (hlive : ∀ p ∈ interpText, live p.1) {Φ : Nat × String
   rotate_left
   · icombine Hcode HE Hro Hst Hw Hab as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
-  refine CloE_runA (nam := nam) hlive hsf hs hs2 hs3 hfn.lo (by have := hfn.hi; omega)
-    (by have := hfn.off; omega) har.s5 har.sp hfn.nam ?_ ?_
+  refine CloE_runA (nam := nam) hlive hfg ⟨hfn.lo, hfn.hi, hfn.off⟩ har.s5 har.sp hfn.nam ?_ ?_
   ·
     intro _
     apply swp_closeRM

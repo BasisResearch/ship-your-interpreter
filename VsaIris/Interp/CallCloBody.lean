@@ -63,7 +63,6 @@ theorem cloBodyEntry (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
           ms 0x80003954#64 R' (closureS s) Mt' -∗ slot24 (s + 18446744073709550528#64 + 144#64).toNat -∗
           Wp.W Φ))
     ⊢ Wp.W Φ := by
-  have hsf := hfg.sf; have hs := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
   have hoff := evalSP_off' hfg
   have hslg := cloSlotGeom hfg
   have h144 := hoff 144 (by decide)
@@ -126,8 +125,7 @@ theorem cloBodyEntry (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF :
   rotate_left
   · icombine HF Hslot Hk as HF; isplitl []; iexact Hdv; iframe HF Hms
   intro F'
-  refine CloB_runB (count := count) hlive hq1 hq2 hq3 hsn.lo hsn.hi hsn.off
-    hsmall
+  refine CloB_runB (count := count) hlive ⟨hq1, hq2, hq3⟩ ⟨hsn.lo, hsn.hi, hsn.off⟩ hsmall
     ((hk2 21 (by decide)).trans hpd.s5) hbod hcnt ?_ ?_
   ·
     intro hgt

@@ -233,8 +233,6 @@ theorem frame_write_close (N : NativeAddrs) {s out : Nat} {st st' : Store} {fa :
       ownSet (baseS s out) (fun a => a ↦ₘ imgM Mt4 a) ∗ storeRepr N st' (B₁ ++ Gm.blocks ++ B₂) := by
   iintro ⟨HS, #Hb, #Hp, #HGe, Hclose, #Hv⟩
   obtain ⟨hcap, -, -, hv1, hv2, -, -⟩ := hlay.slot hlt
-  have hwin : ∀ a, (a < Gm.pv + 24 * j ∨ Gm.pv + 24 * j + 24 ≤ a) → imgM Mt4 a = imgM Mt a :=
-    hco.frame
   ihave ⟨HB, HF⟩ := get_split (img := imgM Mt4) hdisj (fun _ _ => rfl) $$ HS
   have hbl : Gm.blocks = [Gm.sblk, Gm.nblk, Gm.vblk] := by simp [FrameGeom.blocks, hcap]
   have hdis := hlay.disjoint
@@ -252,15 +250,15 @@ theorem frame_write_close (N : NativeAddrs) {s out : Nat} {st st' : Store} {fa :
     unfold InExt at hnotv
     omega
   have hstruct : ∀ a, Gm.e ≤ a → a < Gm.e + 32 → imgM Mt4 a = imgM Mt a := fun a h1 h2 =>
-    hwin a (hoff a (.inl ⟨by omega, by omega⟩))
+    hco.frame a (hoff a (.inl ⟨by omega, by omega⟩))
   have hnames : ∀ k, k < f.vars.length → ∀ o, o < 8 →
       imgM Mt4 (Gm.pn + 8 * k + o) = img (Gm.pn + 8 * k + o) := fun k hk o ho => by
     obtain ⟨-, hn1', hn2', -, -, -, -⟩ := hlay.slot hk
-    rw [hwin _ (hoff _ (.inr ⟨by omega, by omega⟩))]
+    rw [hco.frame _ (hoff _ (.inr ⟨by omega, by omega⟩))]
     exact himg _ (frameS_name hlay hk ho)
   have hvals : ∀ k, k < f.vars.length → k ≠ j → ∀ o, o < 24 →
       imgM Mt4 (Gm.pv + 24 * k + o) = img (Gm.pv + 24 * k + o) := fun k hk hkj o ho => by
-    rw [hwin _ (by
+    rw [hco.frame _ (by
       rcases Nat.lt_or_gt_of_ne hkj with h | h
       · left; omega
       · right; omega)]
@@ -268,11 +266,10 @@ theorem frame_write_close (N : NativeAddrs) {s out : Nat} {st st' : Store} {fa :
   have hww : Gm.pv + 24 * j + 24 ≤ out ∨ out + 24 ≤ Gm.pv + 24 * j := by
     have := interval_apart (a := out) (n := 24) (b := Gm.pv + 24 * j) (m := 24)
       (by omega) (by omega) fun c h1 h2 => by
-        have := hsepOut c (by
+        exact hsepOut c (by
           unfold frameS InExt
           exact .inr ⟨hcap, .inr ⟨hv1 ▸ Nat.le_trans (Nat.le_add_right _ _) h1,
             Nat.lt_of_lt_of_le h2 hv2⟩⟩)
-        exact this
     omega
   have w : ∀ o, o + 8 ≤ 24 → ldv .ld Mt4 (Gm.pv + 24 * j + o) = ldv .ld Mt (out + o) →
       imgW (imgM Mt4) (Gm.pv + 24 * j + o) = imgW fo (out + o) := fun o ho h => by

@@ -49,7 +49,7 @@ theorem cloExitN (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
         stackScratch s n -∗ valAt N sret.toNat .null -∗ world N L Room inp ρ st d -∗
         PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
-  have hsf := hfg.sf; have hs := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
+  geom_open
   have hinpN : (BitVec.ofNat 64 inp).toNat = inp := Nat.mod_eq_of_lt hinpL
   have hi8 : (BitVec.ofNat 64 inp + 8#64).toNat = inp + 8 := by
     have := hinpG.hi; rw [hinpN] at this
@@ -78,7 +78,7 @@ theorem cloExitN (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
     iapply ms_iff (T := fun b => InExt (s.toNat - 1088, 1088) b ∨
       InExt ((BitVec.ofNat 64 inp).toNat + 8, 4) b) (fun k => by rw [hinpN]) $$ Hms
   intro F'
-  refine CloX_runN (m := ∅) (dep := d + 1) hlive hsf hs hs2 hs3 hinpG.lo hinpG.hi
+  refine CloX_runN (m := ∅) (dep := d + 1) hlive hfg hinpG
     (by rw [hinpN]; omega) (by rw [hinpN]; exact hinpA) hat.s2 hat.sp hdl ?_
   apply swp_closeRM
   intro R4 Mt4 hR4 hMt4
@@ -126,7 +126,7 @@ theorem cloExitN (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   · rw [hro]; icombine Hst Hval Hw Hk as HF; isplitl []; iexact Hcode; iframe HF Hms
   intro F'
   refine CloX_runE (m := ∅) (ret := ret) (v8 := rv 8) (v9 := rv 9) (v18 := rv 18) (v19 := rv 19)
-    (v21 := rv 21) (v23 := rv 23) hlive hsf hs hs2 hs3 hal h2' ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+    (v21 := rv 21) (v23 := rv 23) hlive hfg hal h2' ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · rw [hoff 1080 (by decide)]; exact hsv.saved.ra
   · rw [hoff 1072 (by decide)]; exact hsv.saved.s0
   · rw [hoff 1064 (by decide)]; exact hsv.saved.s1
@@ -165,7 +165,7 @@ theorem cloExitR (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
         stackScratch s n -∗ valAt N sret.toNat v -∗ world N L Room inp ρ st d -∗
         PC ↦ᵣ ret -∗ ra ↦ᵣ ret -∗ Wp.W Φ)
     ⊢ Wp.W Φ := by
-  have hsf := hfg.sf; have hs := hfg.lo; have hs2 := hfg.hi; have hs3 := hfg.al
+  geom_open
   have hoff := evalSP_off' hfg
   have h144 := hoff 144 (by decide)
   have hinpN : (BitVec.ofNat 64 inp).toNat = inp := Nat.mod_eq_of_lt hinpL
@@ -200,7 +200,7 @@ theorem cloExitR (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
     iapply ms_iff (T := fun b => InExt (s.toNat - 1088, 1088) b ∨
       InExt ((BitVec.ofNat 64 inp).toNat + 8, 4) b) (fun k => by rw [hinpN]) $$ Hms
   intro F'
-  refine CloX_runX (m := ∅) (dep := d + 1) hlive hsf hs hs2 hs3 hinpG.lo hinpG.hi
+  refine CloX_runX (m := ∅) (dep := d + 1) hlive hfg hinpG
     (by rw [hinpN]; omega) (by rw [hinpN]; exact hinpA) hat.s2 hat.sp hdl ?_ ?_ ?_
   · intro hc
     exfalso
@@ -252,7 +252,7 @@ theorem cloExitR (hlive : ∀ p ∈ interpText, live p.1) (Wp : MachWP (GF := GF
   · rw [hro]; icombine Hw3 Hst Hw Hk as HF; isplitl []; iexact Hcode; iframe HF Hms
   intro F'
   refine CloX_runC (m := ∅) (ret := ret) (v8 := rv 8) (v9 := rv 9) (v18 := rv 18) (v19 := rv 19)
-    (v21 := rv 21) (v23 := rv 23) hlive hsf hs hs2 hs3 hslg.al (by have := hslg.lo; omega) hslg.hi hr4
+    (v21 := rv 21) (v23 := rv 23) hlive hfg hslg hr4
     hal h9' h2' ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · rw [hoff 1080 (by decide)]; exact hsv.saved.ra
   · rw [hoff 1072 (by decide)]; exact hsv.saved.s0
