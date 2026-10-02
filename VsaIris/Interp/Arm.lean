@@ -1,6 +1,7 @@
 import VsaIris.Interp.SpecEval
 import VsaIris.Interp.Bridge
 import VsaIris.Interp.ITac
+import VsaIris.Vsa.FootKey
 
 namespace VsaIris.Interp
 
@@ -179,7 +180,7 @@ theorem ldv_lw_miss (Mt : Mem) {a b w : Nat} (v : BitVec 64) (h : a + 4 ≤ b �
 attribute [ix_mem2_set] ldv_store_hit ldv_ld_hit_eq ldv_ld_miss ldv_lw_miss ldv_lw_store8
 
 macro_rules
-  | `(tactic| ix_mem) => `(tactic| simp_set (disch := sx_addr) ix_mem2_set at *)
+  | `(tactic| ix_mem) => `(tactic| simp_set (disch := foot_or sx_addr) ix_mem2_set at *)
 
 section Res
 
@@ -462,7 +463,7 @@ theorem ofNat_lo32 {w : BitVec 64} {k : Nat} (h : w.toNat % 2 ^ 32 = k) :
 
 syntax "ix_fwd" (" using " "[" term,* "]")? : tactic
 macro_rules
-  | `(tactic| ix_fwd) => `(tactic| simp (disch := first | rfl | dbm | sx_addr) only [slotWrite, ldv_store_hit,
+  | `(tactic| ix_fwd) => `(tactic| simp (disch := first | rfl | foot_or (first | dbm | sx_addr)) only [slotWrite, ldv_store_hit,
       ldv_ld_hit_eq, ldv_ld_miss, ldv_lw_miss, ldv_lw_store8])
   | `(tactic| ix_fwd using [$hs,*]) => do
     let lems ← hs.getElems.mapM fun h => `(Lean.Parser.Tactic.simpLemma| $h:term)

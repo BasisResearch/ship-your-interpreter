@@ -44,7 +44,13 @@ theorem key_ne {x y t a b : Nat} (px : x = t + a) (py : y = t + b) (h : (a == b)
     x ≠ y := by
   intro e; subst px py; simp only [beq_eq_false_iff_ne] at h; omega
 
-/-- `Prod.fst/snd` of a pair and `Nat` constants whose value is a literal, reduced. -/
+/-- The codomain of a (non-dependent) definition type. -/
+def codOf : Expr → Expr
+  | .forallE _ _ b _ => codOf b
+  | b => b
+
+/-- `Prod.fst/snd` of a pair, literal powers and `Nat` constants whose value is a literal, reduced;
+applications of reducible `Nat`/`BitVec`-valued sums (`evalSP s := s + c`) unfolded. -/
 def footClean (e : Expr) : MetaM Expr := do
   if !(e.find? fun t => t.isAppOfArity ``Prod.fst 3 || t.isAppOfArity ``Prod.snd 3 || t.isConst).isSome then
     return e
@@ -53,10 +59,22 @@ def footClean (e : Expr) : MetaM Expr := do
       let p := t.appArg!
       if p.isAppOfArity ``Prod.mk 4 then
         return .done (if t.isAppOfArity ``Prod.fst 3 then p.getArg! 2 else p.getArg! 3)
+    if t.isAppOfArity ``HPow.hPow 6 && (t.getArg! 0).isConstOf ``Nat then
+      if let (some a, some b) := ((t.getArg! 4).nat?, (t.getArg! 5).nat?) then
+        if b ≤ 64 then return .done (mkNatLit (a ^ b))
     if let .const n _ := t then
       if let some (.defnInfo d) := (← getEnv).find? n then
         if d.type.isConstOf ``Nat && d.levelParams.isEmpty then
           if let some k := d.value.nat? then return .done (mkNatLit k)
+    if t.isApp then
+      if let .const n _ := t.getAppFn then
+        if let some (.defnInfo d) := (← getEnv).find? n then
+          let c := codOf d.type
+          let b := d.value.getLambdaBody
+          if (c.isAppOfArity ``BitVec 1 || c.isConstOf ``Nat) && !t.hasMVar &&
+              (b.isAppOfArity ``HAdd.hAdd 6 || b.isAppOfArity ``HSub.hSub 6) &&
+              (← getReducibilityStatus n) == .reducible && !(← isProjectionFn n) then
+            if let some t' ← unfoldDefinition? t then return .visit t'.headBeta
     return .continue)
 
 /-- The goal as a tree of `∨`/`∧` over leaves, definitions unfolded (bounded). `none` when no
@@ -403,11 +421,49 @@ def footKey (g : MVarId) : MetaM Bool := g.withContext do
   g.assign p
   return true
 
+/-- The prepared goal is false whatever its atoms: every disjunct (some conjunct) compares one
+atom with itself and its literals decide it false. -/
+partial def footRefute (nc : NC) (e : Expr) : MetaM Bool := do
+  if e.isAppOfArity ``Or 2 then
+    return (← footRefute nc e.appFn!.appArg!) && (← footRefute nc e.appArg!)
+  if e.isAppOfArity ``And 2 then
+    return (← footRefute nc e.appFn!.appArg!) || (← footRefute nc e.appArg!)
+  if e.isAppOfArity ``Eq 3 || e.isAppOfArity ``Ne 3 then
+    unless (e.getArg! 0).isConstOf ``Nat do return false
+    let some (tx, cx, _) ← linNF nc 3 none (e.getArg! 1) | return false
+    let some (ty, cy, _) ← linNF nc 3 none (e.getArg! 2) | return false
+    return tx == ty && (if e.isAppOfArity ``Eq 3 then cx != cy else cx == cy)
+  let some (g, _) ← relNF nc e | return false
+  return g.t1 == g.t2 && g.b < g.a
+
+inductive FootRes | proved | refuted | unknown
+
+def footKey3 (g : MVarId) : MetaM FootRes := g.withContext do
+  let tgt ← instantiateMVars (← g.getType)
+  let tgt := tgt.consumeMData
+  if (footAcc? tgt).isSome then
+    return if ← footKey g then .proved else .unknown
+  let some e ← footPrep 6 tgt | return .unknown
+  let fc ← footFacts #[] e
+  if let some p ← footDec fc e then
+    if ← isDefEq e tgt then g.assign p; return .proved
+    return .unknown
+  return if ← footRefute fc.nc e then .refuted else .unknown
+
 /-- `foot_key`: decide a footprint / address side goal by atom + literal keys; fails when
 undecided. -/
 elab "foot_key" : tactic => do
   let g ← getMainGoal
   if ← footKey g then replaceMainGoal [] else throwError "foot_key: undecided"
+
+/-- `foot_or t`: `foot_key`; when the goal is refuted by its keys, fail without running `t`
+(a simp discharger probing the miss lemma of the store it hits); otherwise `t`. -/
+elab "foot_or " t:tactic : tactic => do
+  let g ← getMainGoal
+  match ← footKey3 g with
+  | .proved => replaceMainGoal []
+  | .refuted => throwError "foot_or: refuted"
+  | .unknown => evalTactic t
 
 end VsaIris.VsaHeap
 
