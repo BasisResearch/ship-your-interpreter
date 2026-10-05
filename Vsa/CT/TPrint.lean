@@ -58,9 +58,9 @@ theorem run_absT {A : AM} {v : BitVec 64} (hA : A.pc = pcOf 57) (h10 : Has A.reg
 end
 
 def digitTr (j : Nat) (x : BitVec 64) : List Obs :=
-  pobs 52 :: pobs 53 :: (libcTr 54 x 10 ++ (absTr (BitVec.ofInt 64 (x.toInt.tmod 10)) ++
+  pobs 52 :: pobs 53 :: (libcTr 54 modPC x 10 ++ (absTr (BitVec.ofInt 64 (x.toInt.tmod 10)) ++
     (pobs 59 :: mobs 60 (bufBase + 8 * j) :: pobs 61 :: pobs 62 :: pobs 63 :: pobs 64 ::
-      (libcTr 65 x 10 ++ [pobs 68, pobs 69]))))
+      (libcTr 65 divPC x 10 ++ [pobs 68, pobs 69]))))
 
 section
 variable {code : List Ins} (hfit : Fits code) (hseg : Seg code 14 printCode)
