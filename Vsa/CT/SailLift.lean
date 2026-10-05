@@ -148,10 +148,10 @@ theorem step_simT {L : Nat → BitVec 64 → BitVec 64 → BitVec 64 → List (B
     split at h
     · rename_i htgt
       simp only [show (1 : Nat) ≠ 0 by decide, if_false, if_true] at h
-      rw [if_pos hlt] at h
+      try rw [if_pos hlt] at h
       have hobs : obsOf code A = ⟨A.pc, none, some ((A.pc + sign_extend (m := 64) (evenJ off)).toNat,
           srcVal 10 A.regs, srcVal 11 A.regs)⟩ := by
-        unfold obsOf; rw [hf]; simp only [insObs]; rw [if_pos ⟨rfl, hlt⟩]
+        unfold obsOf; rw [hf]; simp only [insObs]; rw [if_pos ⟨by trivial, hlt⟩]
       rw [hobs]
       exact sim_libcallT hL off hc hb hlo hhi hal htgt hlib h
     · cases h
@@ -179,4 +179,3 @@ theorem halts_of_abstractT {L : Nat → BitVec 64 → BitVec 64 → BitVec 64 �
 
 end Vsa.Compiler
 
-end Vsa.Compiler
