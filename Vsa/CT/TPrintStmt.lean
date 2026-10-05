@@ -288,6 +288,135 @@ theorem tPrintT (hP : PrintSpec) {C : Ctx} {pos : Nat} {f : String} {args : List
       rw [hnl]; congr 1; omega
     · simp [hout2]
 
+theorem STr_vac {C : Ctx} {pos : Nat} {s : Stmt} {ℓ : SL}
+    (h : ∀ st d env st' t loop, ExecL st d env s st' t ℓ → SupS C.Γ.names loop s → False) :
+    STr C pos s ℓ :=
+  ⟨[], fun _ _ _ _ _ _ _ _ D _ hs _ _ _ _ _ => (h _ _ _ _ _ _ D hs).elim⟩
+
+theorem QTr_vac {C : Ctx} {pos : Nat} {ss : List Stmt} {ℓ : List SL}
+    (h : ∀ st d env st' t loop, ExecSeqL st d env ss st' t ℓ → SupSeq C.Γ.names loop ss → False) :
+    QTr C pos ss ℓ :=
+  ⟨[], fun _ _ _ _ _ _ _ _ _ _ D _ _ hs _ _ _ _ _ => (h _ _ _ _ _ _ D hs).elim⟩
+
+theorem noLeaf {st : St} {d : Nat} {env : Addr} {fn : String} {args : List Expr} {st' : St} {t : Status}
+    {lf : EL} {la : List EL} {cl : CL}
+    (D : ExecL st d env (.expr (.call (.var fn) args)) st' t (.expr (.call lf la cl))) (h : lf ≠ .leaf) :
+    False := by
+  cases D with
+  | expr _ _ _ _ _ _ _ he =>
+    cases he with
+    | call _ _ _ _ _ _ _ _ _ _ _ _ _ _ hf => cases hf; exact h rfl
+
+theorem noCall {st : St} {d : Nat} {env : Addr} {fn : String} {args : List Expr} {st' : St} {t : Status}
+    {l : EL} (D : ExecL st d env (.expr (.call (.var fn) args)) st' t (.expr l))
+    (h : ∀ lf la cl, l ≠ .call lf la cl) : False := by
+  cases D with
+  | expr _ _ _ _ _ _ _ he =>
+    cases he with
+    | call => exact h _ _ _ rfl
+
+theorem noDecl {st : St} {d : Nat} {env : Addr} {x : String} {e : Expr} {ss : List Stmt} {st' : St}
+    {t : Status} {l : SL} {ls : List SL}
+    (D : ExecSeqL st d env (.varDecl x (some e) :: ss) st' t (l :: ls)) (h : ∀ le, l ≠ .varInit le) :
+    False := by
+  cases D with
+  | consNormal _ _ _ _ _ _ _ _ _ _ h1 _ => cases h1; exact h _ rfl
+  | consAbrupt _ _ _ _ _ _ _ _ h1 _ => cases h1; exact h _ rfl
+
+end
+
+mutual
+
+theorem stmtTr (hP : PrintSpec) : ∀ (ℓ : SL) (C : Ctx) (pos : Nat) (s : Stmt), STr C pos s ℓ
+  | .expr l, C, pos, s => by
+    cases s with
+    | expr e =>
+      by_cases hcall : ∃ f args, e = .call f args
+      · obtain ⟨f, args, rfl⟩ := hcall
+        cases f with
+        | var fn =>
+          cases l with
+          | call lf la cl =>
+            cases lf with
+            | leaf => exact tPrintT hP
+            | _ => exact STr_vac fun _ _ _ _ _ _ D _ => noLeaf D (by simp)
+          | _ => exact STr_vac fun _ _ _ _ _ _ D _ => noCall D (by simp)
+        | _ => exact STr_vac fun _ _ _ _ _ _ _ hs => by simp [SupS, CondE, IntE, BoolE] at hs
+      · exact tExprT (fun f args h => hcall ⟨f, args, h⟩)
+    | _ => exact STr_vac fun _ _ _ _ _ _ D _ => by cases D
+  | .varInit l, C, pos, s => STr_vac fun _ _ _ _ _ _ D hs => by
+      cases D; exact hs.elim
+  | .varNull, C, pos, s => STr_vac fun _ _ _ _ _ _ D hs => by
+      cases D; exact hs.elim
+  | .block ls, C, pos, s => by
+    cases s with
+    | block ss => exact tBlockT (seqTr hP ls _ pos ss)
+    | _ => exact STr_vac fun _ _ _ _ _ _ D _ => by cases D
+  | .ifT lc lt, C, pos, s => by
+    cases s with
+    | ifStmt c th el =>
+      cases el with
+      | none => exact tIfTNoneT (stmtTr hP lt _ _ th)
+      | some el => exact tIfTSomeT (stmtTr hP lt _ _ th)
+    | _ => exact STr_vac fun _ _ _ _ _ _ D _ => by cases D
+  | .ifF lc le, C, pos, s => by
+    cases s with
+    | ifStmt c th el =>
+      cases el with
+      | none => exact STr_vac fun _ _ _ _ _ _ D _ => by cases D
+      | some el => exact tIfFT (stmtTr hP le _ _ el)
+    | _ => exact STr_vac fun _ _ _ _ _ _ D _ => by cases D
+  | .ifN lc, C, pos, s => by
+    cases s with
+    | ifStmt c th el =>
+      cases el with
+      | none => exact tIfNT
+      | some el => exact STr_vac fun _ _ _ _ _ _ D _ => by cases D
+    | _ => exact STr_vac fun _ _ _ _ _ _ D _ => by cases D
+  | .whileF lc, C, pos, s => by
+    cases s with
+    | whileStmt c b => exact tWhileFT
+    | _ => exact STr_vac fun _ _ _ _ _ _ D _ => by cases D
+  | .whileBrk lc lb, C, pos, s => by
+    cases s with
+    | whileStmt c b => exact tWhileBrkT (stmtTr hP lb _ _ b)
+    | _ => exact STr_vac fun _ _ _ _ _ _ D _ => by cases D
+  | .whileRet lc lb, C, pos, s => by
+    cases s with
+    | whileStmt c b => exact tWhileRetT (stmtTr hP lb _ _ b)
+    | _ => exact STr_vac fun _ _ _ _ _ _ D _ => by cases D
+  | .whileLoop lc lb lr, C, pos, s => by
+    cases s with
+    | whileStmt c b => exact tWhileLoopT (stmtTr hP lb _ _ b) (stmtTr hP lr C pos (.whileStmt c b))
+    | _ => exact STr_vac fun _ _ _ _ _ _ D _ => by cases D
+  | .forS _ _, C, pos, s => STr_vac fun _ _ _ _ _ _ D hs => by cases D; exact hs.elim
+  | .ret _, C, pos, s => STr_vac fun _ _ _ _ _ _ D hs => by cases D; exact hs.elim
+  | .retNull, C, pos, s => STr_vac fun _ _ _ _ _ _ D hs => by cases D; exact hs.elim
+  | .brk, C, pos, s => by
+    cases s with
+    | brk => exact tBrkT
+    | _ => exact STr_vac fun _ _ _ _ _ _ D _ => by cases D
+  | .cont, C, pos, s => by
+    cases s with
+    | cont => exact tContT
+    | _ => exact STr_vac fun _ _ _ _ _ _ D _ => by cases D
+
+theorem seqTr (hP : PrintSpec) : ∀ (ℓ : List SL) (C : Ctx) (pos : Nat) (ss : List Stmt), QTr C pos ss ℓ
+  | [], C, pos, ss => by
+    cases ss with
+    | nil => exact sNilT
+    | cons s ss => exact QTr_vac fun _ _ _ _ _ _ D _ => by cases D
+  | l :: ls, C, pos, ss => by
+    cases ss with
+    | nil => exact QTr_vac fun _ _ _ _ _ _ D _ => by cases D
+    | cons s ss =>
+      by_cases hd : ∃ x e, s = .varDecl x (some e)
+      · obtain ⟨x, e, rfl⟩ := hd
+        cases l with
+        | varInit le => exact sConsDeclT (seqTr hP ls _ _ ss)
+        | _ => exact QTr_vac fun _ _ _ _ _ _ D _ => noDecl D (by simp)
+      · exact sConsStmtT (fun x e h => hd ⟨x, e, h⟩) (stmtTr hP l C pos s) (seqTr hP ls _ _ ss)
+
 end
 
 end Vsa.Compiler
