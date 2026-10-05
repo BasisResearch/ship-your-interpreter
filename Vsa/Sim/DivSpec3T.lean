@@ -276,4 +276,158 @@ theorem moddi3_specT (n d r : BitVec 64) (hd0 : d.toInt ≠ 0) (halign : r.toNat
         (r1.frameD hframeE)
       exact ⟨cf, hrun1.trans hsf, post⟩
 
+theorem divdi3_specT (n d r : BitVec 64) (hd0 : d.toInt ≠ 0)
+    (hexcl : ¬(n.toInt = -2^63 ∧ d.toInt = -1)) (halign : r.toNat % 4 = 0) :
+    ∃ τ : List (BitVec 64), ∀ g m0 o, TripleT τ (divdi3_pre g n d r m0 o) (divdi3_post g n d r m0 o) := by
+  have hd0' : d.toInt.natAbs ≠ 0 := fun h => hd0 (Int.natAbs_eq_zero.mp h)
+  rcases bltz_cases' n with hnlt | hnge
+  · have hntop : 2^63 ≤ n.toNat := bltz_true' n hnlt
+    have hnneg : n.toInt < 0 := by rw [toInt_of_top n hntop]; have := n.isLt; omega
+    have hAmag : ((0#64) - n).toNat = n.toInt.natAbs := mag_neg_top n hntop
+    rcases bgtz_cases' d with hdgt | hdle
+    · have hdpos : 0 < d.toInt := bgtz_true' d hdgt
+      have hdtop : d.toNat < 2^63 := by
+        by_cases hc' : d.toNat < 2^63
+        · exact hc'
+        · rw [toInt_of_top d (by omega)] at hdpos; have := d.isLt; omega
+      have hBmag : d.toNat = d.toInt.natAbs := mag_notop d hdtop
+      obtain ⟨τf, hT⟩ := divdi3_mixed_finT n d (0#64 - n) d r (by rw [hBmag]; omega) halign
+      refine ⟨pcsC divOverflowBranchSeg ++ pcsC divdi3NegPosSeg ++ τf, fun g m0 o c hc => ?_⟩
+      obtain ⟨hG, hdl, hul, hcl, hmem, hout, hpc, hn, hd, hr, ⟨vm, hmi⟩,
+        ⟨w12, h12⟩, ⟨w13, h13⟩, htick, _, _, _, hframeE⟩ := hc
+      have held : GHolds c.σ (divIn n d r w12 w13) := ⟨hn, hd, hr, h12, h13, trivial⟩
+      have f1 : ChainFacts c.σ.mem c.σ.mem (divIn n d r w12 w13) [] divOverflowBranchSeg := by
+        chain_facts hdl
+        exact hnlt
+      obtain ⟨c1, r1, hrun1⟩ := segEval_selected_framedT divOverflowBranchSeg _ [] _ vm
+        (fun _ => False) divOverflowKeep (divIn n d r w12 w13) c hG hpc hmi held
+        (by show KeysOK [10, 11, 1, 12, 13]; decide) f1
+        (by show ChainOK _ [10, 11, 1, 12, 13] _; decide) htick (fun _ _ => rfl) (by decide)
+        (by decide) ⟨rfl, rfl, rfl, rfl, rfl, trivial⟩
+      have m1 := r1.mem_eq
+      obtain ⟨vm1, hvm1⟩ := r1.minstret
+      have hul1 : Vsa.Sim.Code.__umoddi3Loaded c1.σ.mem := m1 ▸ hul
+      have f2 : ChainFacts c1.σ.mem c1.σ.mem (divIn n d r w12 w13) [] divdi3NegPosSeg := by
+        chain_facts hul1
+        exact hdgt
+      obtain ⟨c2, r2, hrun2⟩ := segEval_selected_framedT divdi3NegPosSeg _ [] 0x80004704#64 vm1
+        (fun _ => False) divOverflowKeep [(10, 0#64 - n), (11, d), (5, r), (12, w12), (13, w13)]
+        c1 r1.good r1.pc hvm1 r1.selected_regs (by show KeysOK [10, 11, 1, 12, 13]; decide) f2
+        (by show ChainOK _ [10, 11, 1, 12, 13] _; decide) r1.tick (fun _ _ => rfl) (by decide)
+        (by decide) ⟨rfl, rfl, congrArg some (addi0T r), rfl, rfl, trivial⟩
+      have m2 := r2.mem_eq.trans m1
+      obtain ⟨cf, hsf, post⟩ := hT g w12 w13 m0 o c2 r2.good r2.pc r2.minstret r2.tick (m2 ▸ hul)
+        (m2 ▸ hcl) (m2.trans hmem) (r2.output.trans (r1.output.trans hout)) r2.selected_regs
+        hAmag hBmag hd0 (fun hi => absurd (hi.mpr (Int.le_of_lt hdpos)) (by omega))
+        (r2.frameD (r1.frameD hframeE))
+      exact ⟨cf, (hrun1.trans hrun2).trans hsf, post⟩
+    · have hdle' : d.toInt ≤ 0 := bgtz_false' d hdle
+      have hdneg : d.toInt < 0 := by omega
+      have hdtop : 2^63 ≤ d.toNat := by
+        by_cases hc' : d.toNat < 2^63
+        · rw [toInt_of_notop d hc'] at hdneg; have := d.isLt; omega
+        · omega
+      have hBmag : ((0#64) - d).toNat = d.toInt.natAbs := mag_neg_top d hdtop
+      have hsame : (0 ≤ n.toInt ↔ 0 ≤ d.toInt) :=
+        ⟨fun h => absurd h (by omega), fun h => absurd h (by omega)⟩
+      obtain ⟨τf, hT⟩ := core_call_tail_fT (0#64 - n) (0#64 - d) r (by rw [hBmag]; omega) halign
+      refine ⟨pcsC divOverflowBranchSeg ++ pcsC divdi3NegNegSeg ++ τf, fun g m0 o c hc => ?_⟩
+      obtain ⟨hG, hdl, hul, hcl, hmem, hout, hpc, hn, hd, hr, ⟨vm, hmi⟩,
+        ⟨w12, h12⟩, ⟨w13, h13⟩, htick, _, _, _, hframeE⟩ := hc
+      have held : GHolds c.σ (divIn n d r w12 w13) := ⟨hn, hd, hr, h12, h13, trivial⟩
+      have f1 : ChainFacts c.σ.mem c.σ.mem (divIn n d r w12 w13) [] divOverflowBranchSeg := by
+        chain_facts hdl
+        exact hnlt
+      obtain ⟨c1, r1, hrun1⟩ := segEval_selected_framedT divOverflowBranchSeg _ [] _ vm
+        (fun _ => False) divOverflowKeep (divIn n d r w12 w13) c hG hpc hmi held
+        (by show KeysOK [10, 11, 1, 12, 13]; decide) f1
+        (by show ChainOK _ [10, 11, 1, 12, 13] _; decide) htick (fun _ _ => rfl) (by decide)
+        (by decide) ⟨rfl, rfl, rfl, rfl, rfl, trivial⟩
+      have m1 := r1.mem_eq
+      obtain ⟨vm1, hvm1⟩ := r1.minstret
+      have hul1 : Vsa.Sim.Code.__umoddi3Loaded c1.σ.mem := m1 ▸ hul
+      have f2 : ChainFacts c1.σ.mem c1.σ.mem (divIn n d r w12 w13) [] divdi3NegNegSeg := by
+        chain_facts hul1
+        exact hdle
+      obtain ⟨c2, r2, hrun2⟩ := segEval_selected_framedT divdi3NegNegSeg _ [] 0x80004704#64 vm1
+        (fun _ => False) divOverflowKeep (divIn (0#64 - n) (0#64 - d) r w12 w13)
+        c1 r1.good r1.pc hvm1 r1.selected_regs (by show KeysOK [10, 11, 1, 12, 13]; decide) f2
+        (by show ChainOK _ [10, 11, 1, 12, 13] _; decide) r1.tick (fun _ _ => rfl) (by decide)
+        (by decide) ⟨rfl, rfl, rfl, rfl, rfl, trivial⟩
+      have m2 := r2.mem_eq.trans m1
+      obtain ⟨x10, x11, x1, x12, x13, _⟩ := r2.selected_regs
+      obtain ⟨c3, hs3, hG3, hmem3, hout3, hpc3, hq3, _, _, htick3, hframe3, _⟩ :=
+        hT m0 o c2 r2.good (m2 ▸ hcl) (m2.trans hmem) (r2.output.trans (r1.output.trans hout))
+          r2.pc x10 x11 x1 ⟨w12, x12⟩ ⟨w13, x13⟩ r2.minstret r2.tick
+      refine ⟨c3, (hrun1.trans hrun2).trans hs3, hG3, hmem3, hout3, hpc3, htick3, ?_, _, hq3,
+        res_div_same n d _ _ hAmag hBmag hsame hd0
+          (udiv_lt_of_not_overflow n d _ _ hAmag hBmag hsame hd0 hexcl)⟩
+      intro R hR
+      rw [hframe3 R hR.nw]; exact r2.frameD (r1.frameD hframeE) R hR
+  · have hntop : n.toNat < 2^63 := bltz_false' n hnge
+    have hnInt : 0 ≤ n.toInt := by rw [toInt_of_notop n hntop]; exact Int.natCast_nonneg _
+    have hAmag : n.toNat = n.toInt.natAbs := mag_notop n hntop
+    rcases bltz_cases' d with hdlt | hdge
+    · have hdtop : 2^63 ≤ d.toNat := bltz_true' d hdlt
+      have hdneg : d.toInt < 0 := by rw [toInt_of_top d hdtop]; have := d.isLt; omega
+      have hBmag : ((0#64) - d).toNat = d.toInt.natAbs := mag_neg_top d hdtop
+      obtain ⟨τf, hT⟩ := divdi3_mixed_finT n d n (0#64 - d) r (by rw [hBmag]; omega) halign
+      refine ⟨pcsC divdi3PosNegSeg ++ pcsC divdi3PosNegSeg2 ++ τf, fun g m0 o c hc => ?_⟩
+      obtain ⟨hG, hdl, hul, hcl, hmem, hout, hpc, hn, hd, hr, ⟨vm, hmi⟩,
+        ⟨w12, h12⟩, ⟨w13, h13⟩, htick, _, _, _, hframeE⟩ := hc
+      have held : GHolds c.σ (divIn n d r w12 w13) := ⟨hn, hd, hr, h12, h13, trivial⟩
+      have f1 : ChainFacts c.σ.mem c.σ.mem (divIn n d r w12 w13) [] divdi3PosNegSeg := by
+        chain_facts hdl
+        exact hnge
+        exact hdlt
+      obtain ⟨c1, r1, hrun1⟩ := segEval_selected_framedT divdi3PosNegSeg _ [] _ vm (fun _ => False)
+        divOverflowKeep (divIn n d r w12 w13) c hG hpc hmi held
+        (by show KeysOK [10, 11, 1, 12, 13]; decide) f1
+        (by show ChainOK _ [10, 11, 1, 12, 13] _; decide) htick (fun _ _ => rfl) (by decide)
+        (by decide) ⟨rfl, rfl, rfl, rfl, rfl, trivial⟩
+      have m1 := r1.mem_eq
+      obtain ⟨vm1, hvm1⟩ := r1.minstret
+      have f2 : ChainFacts c1.σ.mem c1.σ.mem (divIn n d r w12 w13) [] divdi3PosNegSeg2 := by
+        chain_facts (m1 ▸ hul : Vsa.Sim.Code.__umoddi3Loaded c1.σ.mem)
+          with "Vsa.Sim.Code.__umoddi3_at_"
+      obtain ⟨c2, r2, hrun2⟩ := segEval_selected_framedT divdi3PosNegSeg2 _ [] 0x80004714#64 vm1
+        (fun _ => False) divOverflowKeep [(10, n), (11, 0#64 - d), (5, r), (12, w12), (13, w13)]
+        c1 r1.good r1.pc hvm1 r1.selected_regs (by show KeysOK [10, 11, 1, 12, 13]; decide) f2
+        (by show ChainOK _ [10, 11, 1, 12, 13] _; decide) r1.tick (fun _ _ => rfl) (by decide)
+        (by decide) ⟨rfl, rfl, congrArg some (addi0T r), rfl, rfl, trivial⟩
+      have m2 := r2.mem_eq.trans m1
+      obtain ⟨cf, hsf, post⟩ := hT g w12 w13 m0 o c2 r2.good r2.pc r2.minstret r2.tick (m2 ▸ hul)
+        (m2 ▸ hcl) (m2.trans hmem) (r2.output.trans (r1.output.trans hout)) r2.selected_regs
+        hAmag hBmag hd0 (fun hi => absurd (hi.mp hnInt) (by omega))
+        (r2.frameD (r1.frameD hframeE))
+      exact ⟨cf, (hrun1.trans hrun2).trans hsf, post⟩
+    · have hdtop : d.toNat < 2^63 := bltz_false' d hdge
+      have hdInt : 0 ≤ d.toInt := by rw [toInt_of_notop d hdtop]; exact Int.natCast_nonneg _
+      have hBmag : d.toNat = d.toInt.natAbs := mag_notop d hdtop
+      have hsame : (0 ≤ n.toInt ↔ 0 ≤ d.toInt) := ⟨fun _ => hdInt, fun _ => hnInt⟩
+      obtain ⟨τf, hT⟩ := core_call_tail_fT n d r (by rw [hBmag]; omega) halign
+      refine ⟨pcsC divdi3PosSeg ++ τf, fun g m0 o c hc => ?_⟩
+      obtain ⟨hG, hdl, hul, hcl, hmem, hout, hpc, hn, hd, hr, ⟨vm, hmi⟩,
+        ⟨w12, h12⟩, ⟨w13, h13⟩, htick, _, _, _, hframeE⟩ := hc
+      have held : GHolds c.σ (divIn n d r w12 w13) := ⟨hn, hd, hr, h12, h13, trivial⟩
+      have f1 : ChainFacts c.σ.mem c.σ.mem (divIn n d r w12 w13) [] divdi3PosSeg := by
+        chain_facts hdl
+        exact hnge
+        exact hdge
+      obtain ⟨c1, r1, hrun1⟩ := segEval_selected_framedT divdi3PosSeg _ [] _ vm (fun _ => False)
+        divOverflowKeep (divIn n d r w12 w13) c hG hpc hmi held
+        (by show KeysOK [10, 11, 1, 12, 13]; decide) f1
+        (by show ChainOK _ [10, 11, 1, 12, 13] _; decide) htick (fun _ _ => rfl) (by decide)
+        (by decide) ⟨rfl, rfl, rfl, rfl, rfl, trivial⟩
+      have m1 := r1.mem_eq
+      obtain ⟨x10, x11, x1, x12, x13, _⟩ := r1.selected_regs
+      obtain ⟨c3, hs3, hG3, hmem3, hout3, hpc3, hq3, _, _, htick3, hframe3, _⟩ :=
+        hT m0 o c1 r1.good (m1 ▸ hcl) (m1.trans hmem) (r1.output.trans hout) r1.pc x10 x11 x1
+          ⟨w12, x12⟩ ⟨w13, x13⟩ r1.minstret r1.tick
+      refine ⟨c3, hrun1.trans hs3, hG3, hmem3, hout3, hpc3, htick3, ?_, _, hq3,
+        res_div_same n d _ _ hAmag hBmag hsame hd0
+          (udiv_lt_of_not_overflow n d _ _ hAmag hBmag hsame hd0 hexcl)⟩
+      intro R hR
+      rw [hframe3 R hR.nw]; exact r1.frameD hframeE R hR
+
 end Vsa.Sim
