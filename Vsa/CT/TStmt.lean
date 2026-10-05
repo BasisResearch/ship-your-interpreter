@@ -244,7 +244,7 @@ theorem tIfFT {C : Ctx} {pos : Nat} {c : Expr} {th el : Stmt} {lc : EL} {le : SL
   refine ⟨B2, r1.trans r2, ?_, hsr2, hsp1.trans hsp2, hret, hnorm⟩
   rw [hpc2]; cases t <;> simp only [exitPos] <;> congr 1 <;> omega
 
-def wBody (C : Ctx) (pos : Nat) (c : Expr) (b : Stmt) : Ctx :=
+def wBodyC (C : Ctx) (pos : Nat) (c : Expr) (b : Stmt) : Ctx :=
   ⟨C.Γ, C.next, pos + (cexpr C.Γ 0 pos c).length + 2 +
     (cstmt ⟨C.Γ, C.next, 0, 0⟩ (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length + 1, pos⟩
 
@@ -255,16 +255,16 @@ structure WSetup (code : List Ins) (C : Ctx) (pos : Nat) (c : Expr) (b : Stmt) :
         (cstmt ⟨C.Γ, C.next, 0, 0⟩ (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length + 1))])
   bpos : PosOK (pos + (cexpr C.Γ 0 pos c).length + 2)
   g3 : Seg code (pos + (cexpr C.Γ 0 pos c).length + 2)
-    (cstmt (wBody C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1
+    (cstmt (wBodyC C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1
   p3 : PosOK (pos + (cexpr C.Γ 0 pos c).length + 2 +
-    (cstmt (wBody C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length)
+    (cstmt (wBodyC C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length)
   g4 : code[pos + (cexpr C.Γ 0 pos c).length + 2 +
-    (cstmt (wBody C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length]? =
+    (cstmt (wBodyC C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length]? =
     some (.jal 0 (jOff (pos + (cexpr C.Γ 0 pos c).length + 2 +
-      (cstmt (wBody C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length) pos))
+      (cstmt (wBodyC C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length) pos))
   pe : PosOK (pos + (cexpr C.Γ 0 pos c).length + 2 +
     (cstmt ⟨C.Γ, C.next, 0, 0⟩ (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length + 1)
-  len : (cstmt (wBody C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length =
+  len : (cstmt (wBodyC C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length =
     (cstmt ⟨C.Γ, C.next, 0, 0⟩ (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length
   total : pos + (cstmt C pos (.whileStmt c b)).1.length = pos + (cexpr C.Γ 0 pos c).length + 2 +
     (cstmt ⟨C.Γ, C.next, 0, 0⟩ (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length + 1
@@ -276,9 +276,9 @@ theorem wsetup {C : Ctx} {pos : Nat} {c : Expr} {b : Stmt}
   have ht2 := cstmt_targets C (pos + (cexpr C.Γ 0 pos c).length + 2 +
     (cstmt ⟨C.Γ, C.next, 0, 0⟩ (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length + 1) pos
     (pos + (cexpr C.Γ 0 pos c).length + 2) b
-  have hlen : (cstmt (wBody C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length =
+  have hlen : (cstmt (wBodyC C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length =
       (cstmt ⟨C.Γ, C.next, 0, 0⟩ (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length := by
-    rw [wBody, ht2.1, ← ht1.1]
+    rw [wBodyC, ht2.1, ← ht1.1]
   rw [cstmt_while] at hseg hpos
   dsimp only at hseg hpos
   have h := And.intro hseg hpos
@@ -287,19 +287,19 @@ theorem wsetup {C : Ctx} {pos : Nat} {c : Expr} {b : Stmt}
   obtain ⟨⟨g1, -⟩, ⟨g2, hbpos⟩, ⟨g3, p3⟩, g4, p4⟩ := h
   refine ⟨seg_app_iff.mpr ⟨g1, g2⟩, hbpos, g3, p3, g4.head, ?_, hlen, ?_⟩
   · have : PosOK (pos + (cexpr C.Γ 0 pos c).length + 2 +
-      (cstmt (wBody C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length + 1) := p4
+      (cstmt (wBodyC C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length + 1) := p4
     rwa [hlen] at this
   · rw [cstmt_while]; dsimp only
     simp only [List.length_append, List.length_cons, List.length_nil]
-    have : (cstmt (wBody C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length =
+    have : (cstmt (wBodyC C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length =
       (cstmt ⟨C.Γ, C.next, pos + (cexpr C.Γ 0 pos c).length + 2 +
         (cstmt ⟨C.Γ, C.next, 0, 0⟩ (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length + 1, pos⟩
         (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length := rfl
     omega
 
-theorem wBody_at {C : Ctx} {pos : Nat} {c : Expr} {b : Stmt} (hAt : At code C pos) (hw : WSetup code C pos c b) :
-    At code (wBody C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) :=
-  ⟨hAt.lay, hAt.ne, hAt.nd, hAt.lt, hAt.nat, by have := hAt.nextle; simp only [wBody]; omega, hw.bpos⟩
+theorem wBodyC_at {C : Ctx} {pos : Nat} {c : Expr} {b : Stmt} (hAt : At code C pos) (hw : WSetup code C pos c b) :
+    At code (wBodyC C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) :=
+  ⟨hAt.lay, hAt.ne, hAt.nd, hAt.lt, hAt.nat, by have := hAt.nextle; simp only [wBodyC]; omega, hw.bpos⟩
 
 theorem tWhileFT {C : Ctx} {pos : Nat} {c : Expr} {b : Stmt} {lc : EL} :
     STr C pos (.whileStmt c b) (.whileF lc) := by
@@ -315,7 +315,7 @@ theorem tWhileFT {C : Ctx} {pos : Nat} {c : Expr} {b : Stmt} {lc : EL} :
   exact ⟨B1, r1, by rw [hpc1]; simp only [exitPos]; rw [hw.total], hsr1, hsp1, by simp, fun _ => rfl⟩
 
 theorem tWhileBrkT {C : Ctx} {pos : Nat} {c : Expr} {b : Stmt} {lc : EL} {lb : SL}
-    (ihb : STr (wBody C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b lb) :
+    (ihb : STr (wBodyC C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b lb) :
     STr C pos (.whileStmt c b) (.whileBrk lc lb) := by
   obtain ⟨τ, hτ⟩ := ihb
   refine ⟨etr C.Γ 0 pos c lc ++ condTr (pos + (cexpr C.Γ 0 pos c).length) true ++ τ,
@@ -327,13 +327,13 @@ theorem tWhileBrkT {C : Ctx} {pos : Nat} {c : Expr} {b : Stmt} {lc : EL} {lb : S
   obtain ⟨B1, r1, hsr1, hsp1, hpc1⟩ := condTT hAt hc hw.g12 hw.pe hA hsr hev
   rw [htr] at r1
   rw [if_pos htr] at hpc1
-  obtain ⟨B2, r2, hpc2, hsr2, hsp2, -, -⟩ := hτ code st1 d env _ .brk true B1 hb (wBody_at hAt hw) hsb
+  obtain ⟨B2, r2, hpc2, hsr2, hsp2, -, -⟩ := hτ code st1 d env _ .brk true B1 hb (wBodyC_at hAt hw) hsb
     hw.g3 hw.p3 (fun _ => ⟨hw.pe, hAt.posok⟩) hpc1 hsr1
   refine ⟨B2, r1.trans r2, ?_, hsr2, hsp1.trans hsp2, by simp, fun _ => rfl⟩
-  rw [hpc2]; simp only [exitPos, wBody]; rw [hw.total]
+  rw [hpc2]; simp only [exitPos, wBodyC]; rw [hw.total]
 
 theorem tWhileRetT {C : Ctx} {pos : Nat} {c : Expr} {b : Stmt} {lc : EL} {lb : SL}
-    (ihb : STr (wBody C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b lb) :
+    (ihb : STr (wBodyC C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b lb) :
     STr C pos (.whileStmt c b) (.whileRet lc lb) := by
   obtain ⟨τ, hτ⟩ := ihb
   refine ⟨etr C.Γ 0 pos c lc ++ condTr (pos + (cexpr C.Γ 0 pos c).length) true ++ τ,
@@ -344,18 +344,18 @@ theorem tWhileRetT {C : Ctx} {pos : Nat} {c : Expr} {b : Stmt} {lc : EL} {lb : S
   have hw := wsetup hseg hpos
   obtain ⟨B1, r1, hsr1, hsp1, hpc1⟩ := condTT hAt hc hw.g12 hw.pe hA hsr hev
   rw [if_pos htr] at hpc1
-  obtain ⟨B2, -, -, -, -, hret, -⟩ := hτ code st1 d env _ _ true B1 hb (wBody_at hAt hw) hsb
+  obtain ⟨B2, -, -, -, -, hret, -⟩ := hτ code st1 d env _ _ true B1 hb (wBodyC_at hAt hw) hsb
     hw.g3 hw.p3 (fun _ => ⟨hw.pe, hAt.posok⟩) hpc1 hsr1
   exact absurd rfl (hret rv)
 
 def backTr (C : Ctx) (pos : Nat) (c : Expr) (b : Stmt) (lb : SL) : List Obs :=
   if lb.st = .normal then
     [pobs (pos + (cexpr C.Γ 0 pos c).length + 2 +
-      (cstmt (wBody C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length)]
+      (cstmt (wBodyC C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b).1.length)]
   else []
 
 theorem tWhileLoopT {C : Ctx} {pos : Nat} {c : Expr} {b : Stmt} {lc : EL} {lb lr : SL}
-    (ihb : STr (wBody C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b lb)
+    (ihb : STr (wBodyC C pos c b) (pos + (cexpr C.Γ 0 pos c).length + 2) b lb)
     (ihr : STr C pos (.whileStmt c b) lr) :
     STr C pos (.whileStmt c b) (.whileLoop lc lb lr) := by
   obtain ⟨τ, hτ⟩ := ihb
@@ -371,7 +371,7 @@ theorem tWhileLoopT {C : Ctx} {pos : Nat} {c : Expr} {b : Stmt} {lc : EL} {lb lr
   obtain ⟨B1, r1, hsr1, hsp1, hpc1⟩ := condTT hAt hc hw.g12 hw.pe hA hsr hev
   rw [htr] at r1
   rw [if_pos htr] at hpc1
-  obtain ⟨B2, r2, hpc2, hsr2, hsp2, hret2, -⟩ := hτ code st1 d env st2 tb true B1 hb (wBody_at hAt hw) hsb
+  obtain ⟨B2, r2, hpc2, hsr2, hsp2, hret2, -⟩ := hτ code st1 d env st2 tb true B1 hb (wBodyC_at hAt hw) hsb
     hw.g3 hw.p3 (fun _ => ⟨hw.pe, hAt.posok⟩) hpc1 hsr1
   have hst := execL_st hb hret2
   have hback : ReachesT code B2 (backTr C pos c b lb)
