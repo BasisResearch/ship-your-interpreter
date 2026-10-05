@@ -34,6 +34,10 @@ def WP (code : List Ins) (P : AM → Prop) (pos : Nat) :
         WP code P (pos + 1) is K (gset L rd (srcVal r1 L + srcVal r2 L)) m o
     | .sub rd r1 r2 => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK r1 (keysG L) ∧ SrcOK r2 (keysG L) ∧
         WP code P (pos + 1) is K (gset L rd (srcVal r1 L - srcVal r2 L)) m o
+    | .slt rd r1 r2 => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK r1 (keysG L) ∧ SrcOK r2 (keysG L) ∧
+        WP code P (pos + 1) is K (gset L rd (sltW (srcVal r1 L) (srcVal r2 L))) m o
+    | .and rd r1 r2 => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK r1 (keysG L) ∧ SrcOK r2 (keysG L) ∧
+        WP code P (pos + 1) is K (gset L rd (srcVal r1 L &&& srcVal r2 L)) m o
     | .ld rd rs => (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs (keysG L) ∧ LdOK (srcVal rs L).toNat ∧
         WP code P (pos + 1) is K (gset L rd (rdW m (srcVal rs L).toNat)) m o
     | .sd rs2 rs1 => SrcOK rs1 (keysG L) ∧ SrcOK rs2 (keysG L) ∧
@@ -300,6 +304,14 @@ theorem WP_sound {code : List Ins} {P : AM → Prop} (hfit : Fits code) :
       obtain ⟨hrd, h1, h2, hw⟩ := h
       exact ex_step (step_sub hfit hk rfl hrd (has_of_src h1) (has_of_src h2))
         (ih _ _ _ hseg.tail hK' hw)
+    | slt rd r1 r2 =>
+      obtain ⟨hrd, h1, h2, hw⟩ := h
+      exact ex_step (step_slt hfit hk rfl hrd (has_of_src h1) (has_of_src h2))
+        (ih _ _ _ hseg.tail hK' hw)
+    | and rd r1 r2 =>
+      obtain ⟨hrd, h1, h2, hw⟩ := h
+      exact ex_step (step_and hfit hk rfl hrd (has_of_src h1) (has_of_src h2))
+        (ih _ _ _ hseg.tail hK' hw)
     | ld rd rs =>
       obtain ⟨hrd, hs, ha, hw⟩ := h
       exact ex_step (step_ld hfit hk rfl hrd (has_of_src hs) ha) (ih _ _ _ hseg.tail hK' hw)
@@ -405,6 +417,8 @@ theorem WP_mono {code : List Ins} {P : AM → Prop} :
     | slli => exact ⟨h.1, h.2.1, ih _ _ _ hK h.2.2⟩
     | add => exact ⟨h.1, h.2.1, h.2.2.1, ih _ _ _ hK h.2.2.2⟩
     | sub => exact ⟨h.1, h.2.1, h.2.2.1, ih _ _ _ hK h.2.2.2⟩
+    | slt => exact ⟨h.1, h.2.1, h.2.2.1, ih _ _ _ hK h.2.2.2⟩
+    | and => exact ⟨h.1, h.2.1, h.2.2.1, ih _ _ _ hK h.2.2.2⟩
     | ld => exact ⟨h.1, h.2.1, h.2.2.1, ih _ _ _ hK h.2.2.2⟩
     | sd rs2 rs1 =>
       obtain ⟨h1, h2, hw⟩ := h

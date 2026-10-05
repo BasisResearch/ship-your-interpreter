@@ -695,6 +695,18 @@ theorem step_sim {code : List Ins} {A A' : AM} {c : Config} (hc : Corr c A)
         exact sim_M (.sub rd rs1 rs2) trivial hc hb hlo hhi hal hk [] trivial
           (Or.inr (show (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 (keysG A.regs) ∧ SrcOK rs2 (keysG A.regs) from hk).1)
       · cases h
+    | slt rd rs1 rs2 =>
+      simp only [exec] at h; split at h
+      · rename_i hk; cases h
+        exact sim_M (.slt rd rs1 rs2) trivial hc hb hlo hhi hal hk [] trivial
+          (Or.inr (show (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 (keysG A.regs) ∧ SrcOK rs2 (keysG A.regs) from hk).1)
+      · cases h
+    | and rd rs1 rs2 =>
+      simp only [exec] at h; split at h
+      · rename_i hk; cases h
+        exact sim_M (.and rd rs1 rs2) trivial hc hb hlo hhi hal hk [] trivial
+          (Or.inr (show (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 (keysG A.regs) ∧ SrcOK rs2 (keysG A.regs) from hk).1)
+      · cases h
     | ld rd rs1 =>
       simp only [exec] at h; split at h
       · rename_i hk; split at h
