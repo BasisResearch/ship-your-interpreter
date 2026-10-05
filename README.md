@@ -45,7 +45,8 @@ produced.
 | `ct_sound` | `Vsa/CT/Prog.lean` | a program accepted by the constant-time checker `ctSeq`, run on two inputs that agree on public variables, has leakage of the same shape, and equal leakage when the printed values agree |
 | `sim_mulT`, `sim_divT`, `sim_modT` | `Vsa/Compiler/LibT.lean` | the libgcc multiply, divide and remainder routines take a Sail PC sequence fixed by their operands |
 | `am_ct`, `ct_machine` | `Vsa/CT/TProg.lean`, `Vsa/CT/Machine.lean` | the compiled binaries of a `ctSeq` program for two such inputs halt after the same Sail PC sequence, hence the same number of steps, whenever the printed values agree |
-| `sel_machine`, `eq_machine`, `lad_machine` | `Vsa/CT/Examples.lean` | `ct_machine` for constant-time select, a byte-distance check and a Montgomery ladder |
+| `ct_sound_pub`, `ct_machine_pub` | `Vsa/CT/Prog.lean`, `Vsa/CT/Machine.lean` | for programs accepted by `ctSeqPub` (every print argument public), the two runs print the same output and follow the same Sail PC sequence, with no condition on the printed values |
+| `sel_machine`, `eq_machine`, `lad_machine`, `ladPub_machine` | `Vsa/CT/Examples.lean` | `ct_machine` for constant-time select, a byte-distance check and a Montgomery ladder |
 
 ## Constant-time WHILE
 
@@ -54,7 +55,8 @@ branch-free `slt` sequences and `*` to a fixed 64-iteration shift-add loop. `/` 
 libgcc and leak their operands, so the checker requires both to be public. Secret inputs are
 literals of an input prefix written in a fixed shape (`encLit`), so the code layout does not
 depend on them. Printed values are declassified: the machine traces of the two runs agree
-whenever the two runs print the same values. The theorem covers terminating runs. `compileG`
+whenever the two runs print the same values; `ct_machine_pub` drops that condition for programs
+whose print arguments are all public. The theorems cover terminating runs. `compileG`
 and `compileChecked` are not covered; their runtimes branch on data by construction.
 
 ## What is assumed
