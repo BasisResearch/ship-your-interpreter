@@ -387,6 +387,146 @@ theorem tWhileLoopT {C : Ctx} {pos : Nat} {c : Expr} {b : Stmt} {lc : EL} {lb lr
     hseg hpos hloop hpc3 ⟨by rw [hm3]; exact hsr2.1, by simp only [outStr] at *; rw [ho3]; exact hsr2.2⟩
   exact ⟨B4, (((r1.trans r2).trans r3).trans r4), hpc4, hsr4, hsp1.trans (hsp2.trans hsp4), hret4, hnorm4⟩
 
+theorem sim_declT {C : Ctx} {pos : Nat} {x : String} {e : Expr} {st st' : St} {d : Nat} {env : Addr}
+    {v : Value} {l : EL} {A : AM} (hAt : At code C pos) (hnat : ¬ IsNative x) (he : IntE C.Γ.names e)
+    (hseg : Seg code pos (declCode C pos x e)) (hA : A.pc = pcOf pos) (hsr : SR C.Γ env st A)
+    (hev : EvalL st d env e st' v l) :
+    ReachesT code A (etr C.Γ 0 pos e l ++ stTr (pos + (cexpr C.Γ 0 pos e).length)
+      (varAddr (declInfo C x).2.1)) fun B =>
+      B.pc = pcOf (pos + (declCode C pos x e).length) ∧
+      SR (declInfo C x).1 env ⟨st'.store.define env x v, st'.out⟩ B ∧
+      SameParents st.store (st'.store.define env x v) ∧
+      At code ⟨(declInfo C x).1, (declInfo C x).2.2, C.brk, C.cont⟩ (pos + (declCode C pos x e).length) := by
+  have hs := IntE.simple he
+  have hend := Seg.end_ok hAt.fits hseg (by simp [declCode])
+  unfold declCode at hseg
+  rw [List.append_assoc] at hseg
+  obtain ⟨⟨hs1, p1⟩, hs2, -⟩ := segP_app.mp ⟨hseg, by rwa [declCode, List.append_assoc] at hend⟩
+  obtain ⟨B1, r1, hev', hty, hout, hBo, hBpc, hB0, hBc, -⟩ := simT_expr hAt.lay hAt.nd hAt.slot_bound e hs
+    0 pos st d env A st' v l (.inl he)
+    (by have := tdepth_le C.Γ e 0 pos hs; have := p1.small; omega) hs1 p1 hA hsr.1 hev
+  obtain ⟨n, rfl, hn⟩ := hty.1 he
+  obtain ⟨f, g, hΓ, hdi⟩ := declInfo_cases C x hAt.ne
+  have hslot : (declInfo C x).2.1 < 2 ^ 24 := by
+    have := hAt.nextle; have := hAt.posok.small
+    rcases hdi with ⟨i, hl, hdi⟩ | ⟨hl, hdi⟩
+    · rw [hdi]; exact hAt.slot_bound i (resolve_mem (x := x) (by simp [hΓ, Scope.resolve, hl]))
+    · rw [hdi]; simp; omega
+  have r2 := run_stAT hAt.fits hs2 hBpc hB0 (by decide) (varAddr_st hslot)
+  refine ⟨_, r1.trans r2, by simp only [declCode, List.length_append]; congr 1; simp; omega, ?_,
+    (EvalE.sameParents e hs hev').trans (sameParents_define _ _ _ _), ?_⟩
+  · refine ⟨?_, by simp only [outStr]; rw [hBo]; exact hsr.2.trans hout.symm⟩
+    have hc := hBc
+    rw [hΓ] at hc
+    have hnd := hAt.nd
+    rw [hΓ] at hnd
+    rcases hdi with ⟨i, hl, hdi⟩ | ⟨hl, hdi⟩
+    · rw [hdi, hΓ]
+      exact hc.define_old hl hnd (slotV_write_self _ _ _ hn) (fun j _ hj => slotV_write_other _ _ _ _ hj)
+    · rw [hdi]
+      dsimp only
+      refine hc.define_new hl hnat (fun h => ?_) (slotV_write_self _ _ _ hn)
+        (fun j hj => slotV_write_other _ _ _ _ ?_)
+      · have := hAt.lt _ (hΓ ▸ h); omega
+      · intro e; subst e; have := hAt.lt _ (hΓ ▸ hj); omega
+  · have hn0 := hAt.nextle
+    have hlt := hAt.lt
+    have hnat0 := hAt.nat
+    have hnd0 := hAt.nd
+    rw [hΓ] at hlt hnat0 hnd0
+    refine ⟨hAt.lay, ?_, ?_, ?_, ?_, ?_, hend⟩ <;>
+      rcases hdi with ⟨i, hl, hdi⟩ | ⟨hl, hdi⟩ <;> simp only [hdi]
+    · rw [hΓ]; simp
+    · simp
+    · rw [hΓ]; exact hnd0
+    · simp only [slots_cons, List.map_cons, List.cons_append] at hnd0 ⊢
+      exact List.nodup_cons.mpr ⟨fun h => (by have := hlt _ (by rw [slots_cons]; exact h); omega), hnd0⟩
+    · rw [hΓ]; exact hlt
+    · intro j hj
+      simp only [slots_cons, List.map_cons, List.cons_append, List.mem_cons] at hj
+      rcases hj with rfl | hj
+      · omega
+      · have := hlt j (by rw [slots_cons]; exact hj); omega
+    · rw [hΓ]; exact hnat0
+    · intro fr hfr y hy
+      rcases List.mem_cons.mp hfr with rfl | hfr
+      · have hyx : y ≠ x := fun e => hnat (e ▸ hy)
+        simp only [List.lookup_cons, show (y == x) = false by simpa using hyx]
+        exact hnat0 f (List.mem_cons_self ..) y hy
+      · exact hnat0 fr (List.mem_cons_of_mem _ hfr) y hy
+    · simp only [declCode, List.length_append, List.length_cons, List.length_nil]; omega
+    · simp only [declCode, List.length_append, List.length_cons, List.length_nil]; omega
+
+theorem sNilT {C : Ctx} {pos : Nat} : QTr C pos [] [] := by
+  refine ⟨[], fun code st d env st' t loop A f g D hΓ hAt hs hseg hpos hloop hA hsr => ?_⟩
+  cases D
+  exact ⟨A, .refl _, by simp [cseq, exitPos, hA], hsr.2, .refl _, by simp, fun _ => rfl,
+    f, by rw [← hΓ]; exact hsr.1, fun _ => by simp [cseq, hΓ]⟩
+
+theorem sConsDeclT {C : Ctx} {pos : Nat} {x : String} {e : Expr} {ss : List Stmt} {l : EL} {ls : List SL}
+    (ih : QTr ⟨(declInfo C x).1, (declInfo C x).2.2, C.brk, C.cont⟩ (pos + (declCode C pos x e).length)
+      ss ls) :
+    QTr C pos (.varDecl x (some e) :: ss) (.varInit l :: ls) := by
+  obtain ⟨τ, hτ⟩ := ih
+  refine ⟨etr C.Γ 0 pos e l ++ stTr (pos + (cexpr C.Γ 0 pos e).length) (varAddr (declInfo C x).2.1) ++ τ,
+    fun code st d env st'' t loop A f g D hΓ hAt hs hseg hpos hloop hA hsr => ?_⟩
+  obtain ⟨hnat, he, hss⟩ := hs
+  cases D with
+  | consNormal _ _ _ _ _ st1 _ _ _ _ h1 h2 =>
+    cases h1 with
+    | varInit _ _ _ _ _ st' v _ hev =>
+    unfold QPost
+    rw [cseq_decl] at hseg hpos ⊢
+    dsimp only at hseg hpos ⊢
+    obtain ⟨⟨hs1, -⟩, hs2, hp2⟩ := segP_app.mp ⟨hseg, hpos⟩
+    obtain ⟨B1, r1, hpc1, hsr1, hsp1, hAt1⟩ := sim_declT hAt hnat he hs1 hA hsr hev
+    have hf1 := declInfo_cons x hΓ
+    simp only [List.length_append]
+    obtain ⟨B2, r2, hpc2, hout2, hsp2, hret2, hnorm2, f', hc2, hΓ2⟩ :=
+      hτ code _ d env st'' t loop B1 _ g h2 hf1 hAt1
+        (by rw [declInfo_names C x hAt.ne]; exact hss) hs2 hp2 hloop hpc1 hsr1
+    refine ⟨B2, r1.trans r2, by rw [hpc2]; cases t <;> simp only [exitPos] <;> congr 1 <;> omega,
+      hout2, hsp1.trans hsp2, hret2, hnorm2, f', hc2, hΓ2⟩
+  | consAbrupt _ _ _ _ _ _ _ _ h1 hne =>
+    cases h1 with | varInit => exact absurd rfl hne
+
+theorem sConsStmtT {C : Ctx} {pos : Nat} {s : Stmt} {ss : List Stmt} {l : SL} {ls : List SL}
+    (hd : ∀ x e, s ≠ .varDecl x (some e)) (h1 : STr C pos s l)
+    (ih : QTr ⟨C.Γ, (cstmt C pos s).2, C.brk, C.cont⟩ (pos + (cstmt C pos s).1.length) ss ls) :
+    QTr C pos (s :: ss) (l :: ls) := by
+  obtain ⟨τ1, h1⟩ := h1
+  obtain ⟨τ, hτ⟩ := ih
+  refine ⟨τ1 ++ (if ls = [] ∧ l.st ≠ .normal then [] else τ),
+    fun code st d env st'' t loop A f g D hΓ hAt hs hseg hpos hloop hA hsr => ?_⟩
+  obtain ⟨hs1, hss⟩ := SupSeq_other hd hs
+  unfold QPost
+  rw [cseq_other C pos s ss hd] at hseg hpos ⊢
+  dsimp only at hseg hpos ⊢
+  obtain ⟨⟨hsg1, hp1⟩, hsg2, hp2⟩ := segP_app.mp ⟨hseg, hpos⟩
+  simp only [List.length_append]
+  cases D with
+  | consNormal _ _ _ _ _ st1 _ _ _ _ D1 D2 =>
+    obtain ⟨B1, r1, hpc1, hsr1, hsp1, hret1, hnorm1⟩ := h1 code st d env st1 .normal loop A D1 hAt hs1
+      hsg1 hp1 hloop hA hsr
+    have hst := execL_st D1 hret1
+    have hif : (if ls = [] ∧ l.st ≠ .normal then ([] : List Obs) else τ) = τ := by
+      rw [if_neg (fun h => h.2 hst.symm)]
+    rw [hif]
+    obtain ⟨B2, r2, hpc2, hout2, hsp2, hret2, hnorm2, f', hc2, hΓ2⟩ :=
+      hτ code st1 d env st'' t loop B1 f g D2 hΓ (hAt.after s (Nat.le_refl _) (Nat.le_refl _) hp1)
+        hss hsg2 hp2 hloop hpc1 hsr1
+    refine ⟨B2, r1.trans r2, by rw [hpc2]; cases t <;> simp only [exitPos] <;> congr 1 <;> omega,
+      hout2, hsp1.trans hsp2, hret2, hnorm2, f', hc2, hΓ2⟩
+  | consAbrupt _ _ _ _ _ _ _ _ D1 hne =>
+    obtain ⟨B1, r1, hpc1, hsr1, hsp1, hret1, hnorm1⟩ := h1 code st d env st'' t loop A D1 hAt hs1
+      hsg1 hp1 hloop hA hsr
+    have hst := execL_st D1 hret1
+    have hif : (if ([] : List SL) = [] ∧ l.st ≠ .normal then ([] : List Obs) else τ) = [] := by
+      rw [if_pos ⟨rfl, fun h => hne (hst.trans h)⟩]
+    rw [hif, List.append_nil]
+    refine ⟨B1, r1, by rw [hpc1, exitPos_abrupt C _ _ hne], hsr1.2, hsp1, hret1, hnorm1, f,
+      by rw [← hΓ]; exact hsr1.1, fun h => absurd h hne⟩
+
 end
 
 end Vsa.Compiler
