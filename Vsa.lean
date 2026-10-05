@@ -125,3 +125,6 @@ import Vsa.While.TypeSearch
 import Vsa.While.Types
 import Vsa.While.TypeStore
 import Vsa.While.Unify
+import Vsa.CT.AMTrace
+import Vsa.CT.TRun
+import Vsa.CT.TPrint
