@@ -41,6 +41,23 @@ produced.
 | `wellTyped_trichotomy`, `noAlarm_machine`, `noAlarm_terminating`, `adequacy_exact` | `VsaIris/Interp/TrichotomyCorollaries.lean` | the type system, the analyser and the program logic combined with the trichotomy |
 | `compile_correct`, `compileG_correct`, `compileChecked_correct` | `Vsa/Compiler/Correct.lean`, `CorrectG.lean`, `Checked.lean` | the WHILE-to-RV64 compilers (a subset compiler, the full compiler, and the checked compiler with no heap premise) produce code with the same refinement property |
 | `loaded_of_checked`, `endToEnd_checked` | `Vsa/Sim/CheckedBoundary.lean`, `VsaIris/Interp/EndToEndChecked.lean` | `endToEnd_refinement` with the two program assumptions replaced by checkers |
+| `bigStep_iff_L` | `Vsa/CT/Agree.lean` | a leakage semantics `BigStepL` (branch taken, division operands, printed values) agrees with `BigStep` on every program |
+| `ct_sound` | `Vsa/CT/Prog.lean` | a program accepted by the constant-time checker `ctSeq`, run on two inputs that agree on public variables, has leakage of the same shape, and equal leakage when the printed values agree |
+| `sim_mulT`, `sim_divT`, `sim_modT` | `Vsa/Compiler/LibT.lean` | the libgcc multiply, divide and remainder routines take a Sail PC sequence fixed by their operands |
+| `am_ct`, `ct_machine` | `Vsa/CT/TProg.lean`, `Vsa/CT/Machine.lean` | the compiled binaries of a `ctSeq` program for two such inputs halt after the same Sail PC sequence, hence the same number of steps, whenever the printed values agree |
+| `ct_sound_pub`, `ct_machine_pub` | `Vsa/CT/Prog.lean`, `Vsa/CT/Machine.lean` | for programs accepted by `ctSeqPub` (every print argument public), the two runs print the same output and follow the same Sail PC sequence, with no condition on the printed values |
+| `sel_machine`, `eq_machine`, `lad_machine`, `ladPub_machine` | `Vsa/CT/Examples.lean` | `ct_machine` for constant-time select, a byte-distance check and a Montgomery ladder |
+
+## Constant-time WHILE
+
+`ct_machine` is stated for the subset compiler `compile`. Comparisons and `!` compile to
+branch-free `slt` sequences and `*` to a fixed 64-iteration shift-add loop. `/` and `%` call
+libgcc and leak their operands, so the checker requires both to be public. Secret inputs are
+literals of an input prefix written in a fixed shape (`encLit`), so the code layout does not
+depend on them. Printed values are declassified: the machine traces of the two runs agree
+whenever the two runs print the same values; `ct_machine_pub` drops that condition for programs
+whose print arguments are all public. The theorems cover terminating runs. `compileG`
+and `compileChecked` are not covered; their runtimes branch on data by construction.
 
 ## What is assumed
 
@@ -74,6 +91,7 @@ files, are not in this repository.
 | `Vsa/Sim/` | decoding, runtime representations, function contracts and the simulation; `Vsa/Sim/Boot/` holds the boot witnesses |
 | `Vsa/AbsInt/` | the abstract interpreter, its domains and the allocation-cost analysis |
 | `Vsa/Compiler/` | the verified compilers |
+| `Vsa/CT/` | the leakage semantics, the constant-time checker and its soundness, the traced compiler simulation and `ct_machine` |
 | `VsaIris/` | the Iris-based machine logic and the interpreter proof; `VsaIris/WhileLogic/` is the source-level program logic |
 | `Vsa.lean`, `VsaIris.lean`, `VsaBoot.lean` | library roots importing the modules above |
 | `VsaRun.lean`, `WhileC.lean`, `WhileCheck.lean` | the executables |

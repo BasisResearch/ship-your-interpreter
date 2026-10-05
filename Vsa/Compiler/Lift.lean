@@ -9,6 +9,11 @@ abbrev ReachCorr (c : Config) (A : AM) : Prop := ∃ c', Steps c c' ∧ Corr c' 
 
 abbrev StepsCorr (c : Config) (A : AM) : Prop := ∃ c', Steps c c' ∧ c.steps < c'.steps ∧ Corr c' A
 
+abbrev Step1Corr (c : Config) (A : AM) : Prop := ∃ c', Steps c c' ∧ c'.steps = c.steps + 1 ∧ Corr c' A
+
+theorem Step1Corr.toSC {c : Config} {A : AM} (h : Step1Corr c A) : StepsCorr c A :=
+  let ⟨c', hs, he, hc⟩ := h; ⟨c', hs, by omega, hc⟩
+
 theorem applyW8_low (m : Mem) (ea : Nat) (v : BitVec 64) (j : Nat) (hj : j < ea) :
     (applyW m (ea, 8, v))[j]? = m[j]? := writeMap8_low_miss m ea _ j hj
 
@@ -114,7 +119,7 @@ theorem sim_M (i : Ins) (hi : i.IsM) {A : AM} {c : Config} (hc : Corr c A)
       (i.toM A.pc).rs2)
     (bs : List (BitVec 8)) (hmf : MemFacts A.mem A.regs bs (i.toM A.pc))
     (hrd : (i.toM A.pc).kind = .sd ∨ (1 ≤ (i.toM A.pc).rd ∧ (i.toM A.pc).rd ≤ 31)) :
-    StepsCorr c ⟨BitVec.addInt A.pc 4, stepGM (i.toM A.pc) A.regs bs,
+    Step1Corr c ⟨BitVec.addInt A.pc 4, stepGM (i.toM A.pc) A.regs bs,
         stepMemM A.mem (i.toM A.pc) A.regs, A.out⟩ := by
   obtain ⟨σ, t, u⟩ := c
   obtain ⟨vm, hvm⟩ := hc.good.minstret
@@ -152,7 +157,7 @@ theorem sim_T (i : Ins) (hi : i.IsT) (tk : Bool) {A : AM} {c : Config} (hc : Cor
     (hk : TermKindOK (keysG A.regs) A.pc (i.toT A.pc tk).rs1 (i.toT A.pc tk).rs2
       (i.toT A.pc tk).imm13 (i.toT A.pc tk).imm21 (i.toT A.pc tk).kind)
     (htf : TermFactsT A.regs (i.toT A.pc tk)) :
-    StepsCorr c { A with pc := tgtPCT (i.toT A.pc tk) A.regs } := by
+    Step1Corr c { A with pc := tgtPCT (i.toT A.pc tk) A.regs } := by
   obtain ⟨σ, t, u⟩ := c
   obtain ⟨vm, hvm⟩ := hc.good.minstret
   obtain ⟨fpc, fw, f0, f1, f2, f3⟩ := toT_fields i A.pc tk
@@ -291,7 +296,7 @@ theorem sim_jal_link (off : BitVec 21) {A : AM} {c : Config} (hc : Corr c A)
     (hlo : 0x80000000 ≤ A.pc.toNat) (hhi : A.pc.toNat + 4 ≤ tohostAddr)
     (hal : A.pc.toNat % 4 = 0)
     (htgt : (A.pc + sign_extend (m := 64) (evenJ off)).toNat % 4 = 0) :
-    StepsCorr c (AM.mk (A.pc + sign_extend (m := 64) (evenJ off))
+    Step1Corr c (AM.mk (A.pc + sign_extend (m := 64) (evenJ off))
         ((1, BitVec.addInt A.pc 4) :: eraseG 1 A.regs) A.mem A.out) := by
   obtain ⟨σ, t, u⟩ := c
   obtain ⟨vm, hvm⟩ := hc.good.minstret
@@ -467,7 +472,7 @@ theorem sim_putc {A : AM} {c : Config} (hc : Corr c A) (rs2 rs1 : Nat)
     (h1 : SrcOK rs1 (keysG A.regs)) (h2 : SrcOK rs2 (keysG A.regs))
     (hea : (srcVal rs1 A.regs).toNat = tohostAddr)
     (hv : srcVal rs2 A.regs = putcWord ((srcVal rs2 A.regs).setWidth 8)) :
-    StepsCorr c (AM.mk (BitVec.addInt A.pc 4) A.regs A.mem
+    Step1Corr c (AM.mk (BitVec.addInt A.pc 4) A.regs A.mem
         (A.out.push (toString (Char.ofNat ((srcVal rs2 A.regs).setWidth 8).toNat)))) := by
   obtain ⟨hdec, hrs1, hrs2, haddr⟩ := sd_tohost_facts hc rs2 rs1 h1 h2 hea
   obtain ⟨σ, t, u⟩ := c
@@ -599,7 +604,7 @@ theorem sim_libcall (off : BitVec 21) {A A' : AM} {c : Config} (hc : Corr c A)
     (hlib : LibLoaded A.mem)
     (h : libCall (A.pc + sign_extend (m := 64) (evenJ off)).toNat A = some (.run A')) :
     StepsCorr c A' := by
-  obtain ⟨c1, hs1, hlt1, hc1⟩ := sim_jal_link off hc hb hlo hhi hal htgt
+  obtain ⟨c1, hs1, hlt1, hc1⟩ := (sim_jal_link off hc hb hlo hhi hal htgt).toSC
   have hret : (BitVec.addInt A.pc 4).toNat % 4 = 0 := by
     rw [addInt4_toNat _ (by simp only [tohostAddr] at hhi; omega)]; omega
   have hr : lookupG 1 ((1, BitVec.addInt A.pc 4) :: eraseG 1 A.regs) = some (BitVec.addInt A.pc 4) := by
@@ -668,6 +673,132 @@ theorem step_sim {code : List Ins} {A A' : AM} {c : Config} (hc : Corr c A)
     | addi rd rs1 imm =>
       simp only [exec] at h; split at h
       · rename_i hk; cases h
+        exact Step1Corr.toSC <| sim_M (.addi rd rs1 imm) trivial hc hb hlo hhi hal hk [] trivial
+          (Or.inr (show (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 (keysG A.regs) from hk).1)
+      · cases h
+    | ori rd rs1 imm =>
+      simp only [exec] at h; split at h
+      · rename_i hk; cases h
+        exact Step1Corr.toSC <| sim_M (.ori rd rs1 imm) trivial hc hb hlo hhi hal hk [] trivial
+          (Or.inr (show (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 (keysG A.regs) from hk).1)
+      · cases h
+    | slli rd rs1 sh =>
+      simp only [exec] at h; split at h
+      · rename_i hk; cases h
+        exact Step1Corr.toSC <| sim_M (.slli rd rs1 sh) trivial hc hb hlo hhi hal hk [] trivial
+          (Or.inr (show (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 (keysG A.regs) from hk).1)
+      · cases h
+    | add rd rs1 rs2 =>
+      simp only [exec] at h; split at h
+      · rename_i hk; cases h
+        exact Step1Corr.toSC <| sim_M (.add rd rs1 rs2) trivial hc hb hlo hhi hal hk [] trivial
+          (Or.inr (show (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 (keysG A.regs) ∧ SrcOK rs2 (keysG A.regs) from hk).1)
+      · cases h
+    | sub rd rs1 rs2 =>
+      simp only [exec] at h; split at h
+      · rename_i hk; cases h
+        exact Step1Corr.toSC <| sim_M (.sub rd rs1 rs2) trivial hc hb hlo hhi hal hk [] trivial
+          (Or.inr (show (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 (keysG A.regs) ∧ SrcOK rs2 (keysG A.regs) from hk).1)
+      · cases h
+    | slt rd rs1 rs2 =>
+      simp only [exec] at h; split at h
+      · rename_i hk; cases h
+        exact Step1Corr.toSC <| sim_M (.slt rd rs1 rs2) trivial hc hb hlo hhi hal hk [] trivial
+          (Or.inr (show (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 (keysG A.regs) ∧ SrcOK rs2 (keysG A.regs) from hk).1)
+      · cases h
+    | and rd rs1 rs2 =>
+      simp only [exec] at h; split at h
+      · rename_i hk; cases h
+        exact Step1Corr.toSC <| sim_M (.and rd rs1 rs2) trivial hc hb hlo hhi hal hk [] trivial
+          (Or.inr (show (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 (keysG A.regs) ∧ SrcOK rs2 (keysG A.regs) from hk).1)
+      · cases h
+    | ld rd rs1 =>
+      simp only [exec] at h; split at h
+      · rename_i hk; split at h
+        · rename_i hbd; cases h
+          exact Step1Corr.toSC <| sim_M (.ld rd rs1) trivial hc hb hlo hhi hal hk _ (ld_memFacts _ _ _ _ _ hbd)
+            (Or.inr (show (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 (keysG A.regs) from hk).1)
+        · cases h
+      · cases h
+    | sd rs2 rs1 =>
+      simp only [exec] at h; split at h
+      · rename_i hk; split at h
+        · rename_i hea
+          unfold htifOut at h
+          split at h; · cases h
+          split at h; · cases h
+          split at h
+          · rename_i hv; cases h
+            exact Step1Corr.toSC <| sim_putc hc rs2 rs1 hb hlo hhi hal hk.1 hk.2 hea hv
+          · cases h
+        · split at h
+          · rename_i hbd; cases h
+            have he : eaddrM ((Ins.sd rs2 rs1).toM A.pc) A.regs = srcVal rs1 A.regs := by
+              show srcVal rs1 A.regs + sign_extend (m := 64) (0#12) = _
+              rw [sext12_zero, BitVec.add_zero]
+            have hmf : MemFacts A.mem A.regs [] ((Ins.sd rs2 rs1).toM A.pc) := by
+              show 0x80000000 ≤ (eaddrM _ A.regs).toNat ∧ _
+              rw [he]; exact hbd
+            obtain ⟨c', hs, hlt, hc'⟩ := sim_M (.sd rs2 rs1) trivial hc hb hlo hhi hal
+              ⟨hk.1, hk.2⟩ [] hmf (Or.inl rfl)
+            refine ⟨c', hs, by omega, ?_⟩
+            have hm : stepMemM A.mem ((Ins.sd rs2 rs1).toM A.pc) A.regs
+                = applyW A.mem ((srcVal rs1 A.regs).toNat, 8, srcVal rs2 A.regs) := by
+              show applyW A.mem ((eaddrM _ A.regs).toNat, 8, srcVal rs2 A.regs) = _
+              rw [he]
+            rw [hm] at hc'; exact hc'
+          · cases h
+      · cases h
+    | br op rs1 rs2 off =>
+      simp only [exec] at h; split at h
+      · rename_i hk; cases h
+        obtain ⟨c', hs, hlt, hc'⟩ := sim_T (.br op rs1 rs2 off) trivial
+          (guardB op.bop (srcVal rs1 A.regs) (srcVal rs2 A.regs)) hc hb hlo hhi hal hk rfl
+        refine ⟨c', hs, by omega, ?_⟩
+        revert hc'
+        cases guardB op.bop (srcVal rs1 A.regs) (srcVal rs2 A.regs) <;> exact id
+      · cases h
+    | jal rd off =>
+      simp only [exec] at h
+      split at h
+      · rename_i htgt
+        split at h
+        · rename_i hrd; subst hrd; cases h
+          exact Step1Corr.toSC <| sim_T (.jal 0 off) rfl false hc hb hlo hhi hal htgt trivial
+        · split at h
+          · rename_i hrd0 hrd; subst hrd
+            split at h
+            · rename_i hlibt
+              exact sim_libcall off hc hb hlo hhi hal htgt hlib h
+            · cases h
+              exact Step1Corr.toSC <| sim_jal_link off hc hb hlo hhi hal htgt
+          · cases h
+      · cases h
+    | jalr rs1 =>
+      simp only [exec] at h; split at h
+      · rename_i hk; cases h
+        exact Step1Corr.toSC <| sim_T (.jalr rs1) trivial false hc hb hlo hhi hal hk.1 hk.2
+      · cases h
+  · cases h
+
+theorem step_sim1 {code : List Ins} {A A' : AM} {c : Config} (hc : Corr c A)
+    (hcode : CodeAt A.mem code)
+    (hnl : ∀ off, fetch code A.pc = some (.jal 1 off) →
+      ¬ ((A.pc + sign_extend (m := 64) (evenJ off)).toNat = mulPC ∨
+        (A.pc + sign_extend (m := 64) (evenJ off)).toNat = divPC ∨
+        (A.pc + sign_extend (m := 64) (evenJ off)).toNat = modPC))
+    (h : astep code A = some (.run A')) :
+    Step1Corr c A' := by
+  unfold astep at h
+  split at h
+  · rename_i i hf
+    obtain ⟨hcb, hal, hhi, _⟩ := fetch_spec hf
+    have hb := fetch_bytes hcode hf
+    have hlo : 0x80000000 ≤ A.pc.toNat := by simp only [codeBase] at hcb; omega
+    cases i with
+    | addi rd rs1 imm =>
+      simp only [exec] at h; split at h
+      · rename_i hk; cases h
         exact sim_M (.addi rd rs1 imm) trivial hc hb hlo hhi hal hk [] trivial
           (Or.inr (show (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 (keysG A.regs) from hk).1)
       · cases h
@@ -693,6 +824,18 @@ theorem step_sim {code : List Ins} {A A' : AM} {c : Config} (hc : Corr c A)
       simp only [exec] at h; split at h
       · rename_i hk; cases h
         exact sim_M (.sub rd rs1 rs2) trivial hc hb hlo hhi hal hk [] trivial
+          (Or.inr (show (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 (keysG A.regs) ∧ SrcOK rs2 (keysG A.regs) from hk).1)
+      · cases h
+    | slt rd rs1 rs2 =>
+      simp only [exec] at h; split at h
+      · rename_i hk; cases h
+        exact sim_M (.slt rd rs1 rs2) trivial hc hb hlo hhi hal hk [] trivial
+          (Or.inr (show (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 (keysG A.regs) ∧ SrcOK rs2 (keysG A.regs) from hk).1)
+      · cases h
+    | and rd rs1 rs2 =>
+      simp only [exec] at h; split at h
+      · rename_i hk; cases h
+        exact sim_M (.and rd rs1 rs2) trivial hc hb hlo hhi hal hk [] trivial
           (Or.inr (show (1 ≤ rd ∧ rd ≤ 31) ∧ SrcOK rs1 (keysG A.regs) ∧ SrcOK rs2 (keysG A.regs) from hk).1)
       · cases h
     | ld rd rs1 =>
@@ -752,7 +895,7 @@ theorem step_sim {code : List Ins} {A A' : AM} {c : Config} (hc : Corr c A)
           · rename_i hrd0 hrd; subst hrd
             split at h
             · rename_i hlibt
-              exact sim_libcall off hc hb hlo hhi hal htgt hlib h
+              exact absurd hlibt (hnl off hf)
             · cases h
               exact sim_jal_link off hc hb hlo hhi hal htgt
           · cases h

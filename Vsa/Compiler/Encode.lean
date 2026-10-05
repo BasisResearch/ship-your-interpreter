@@ -15,6 +15,8 @@ inductive Ins where
   | slli (rd rs1 : Nat) (sh : BitVec 6)
   | add (rd rs1 rs2 : Nat)
   | sub (rd rs1 rs2 : Nat)
+  | slt (rd rs1 rs2 : Nat)
+  | and (rd rs1 rs2 : Nat)
   | ld (rd rs1 : Nat)
   | sd (rs2 rs1 : Nat)
   | br (op : BrOp) (rs1 rs2 : Nat) (off : BitVec 13)
@@ -52,6 +54,8 @@ def Ins.encode : Ins → BitVec 32
   | .slli rd rs1 sh => encI sh.toNat rs1 1 rd 0x13
   | .add rd rs1 rs2 => encR 0 rs2 rs1 0 rd 0x33
   | .sub rd rs1 rs2 => encR 0x20 rs2 rs1 0 rd 0x33
+  | .slt rd rs1 rs2 => encR 0 rs2 rs1 2 rd 0x33
+  | .and rd rs1 rs2 => encR 0 rs2 rs1 7 rd 0x33
   | .ld rd rs1 => encI 0 rs1 3 rd 0x03
   | .sd rs2 rs1 => encS 0 rs2 rs1 3 0x23
   | .br op rs1 rs2 off => encB off.toNat rs2 rs1 op.f3
@@ -199,6 +203,16 @@ theorem decode_rtype_gen (w : BitVec 32) (σ : SSt) (h : DecPins σ) (op : rop)
   · decode_gen [h2, h3, hop, hf3, hf7]
   · decode_gen [h2, h3, hop, hf3, hf7]
 
+theorem decode_rtype_gen2 (w : BitVec 32) (σ : SSt) (h : DecPins σ) (op : rop)
+    (hop : X w 6 0 = 0x33#7) (hf7 : X w 31 25 = 0#7)
+    (hf : (X w 14 12 = 2#3 ∧ op = .SLT) ∨ (X w 14 12 = 7#3 ∧ op = .AND)) :
+    (ext_decode w).run σ = .ok (instruction.RTYPE (regidx.Regidx (X w 24 20),
+      regidx.Regidx (X w 19 15), regidx.Regidx (X w 11 7), op)) σ := by
+  obtain ⟨_, h2, h3⟩ := h
+  rcases hf with ⟨hf3, rfl⟩ | ⟨hf3, rfl⟩
+  · decode_gen [h2, h3, hop, hf3, hf7]
+  · decode_gen [h2, h3, hop, hf3, hf7]
+
 theorem decode_ld_gen (w : BitVec 32) (σ : SSt) (h : DecPins σ)
     (hop : X w 6 0 = 0x03#7) (h14 : X w 14 14 = 0#1) (h12 : X w 13 12 = 3#2) :
     (ext_decode w).run σ = .ok (instruction.LOAD (X w 31 20,
@@ -267,6 +281,8 @@ def Ins.toM (pc : BitVec 64) (i : Ins) : MInstr :=
   | .slli rd rs1 sh => mk .slli rd rs1 0 (sh.setWidth 12)
   | .add rd rs1 rs2 => mk .add rd rs1 rs2 0
   | .sub rd rs1 rs2 => mk .sub rd rs1 rs2 0
+  | .slt rd rs1 rs2 => mk .slt rd rs1 rs2 0
+  | .and rd rs1 rs2 => mk .and rd rs1 rs2 0
   | .ld rd rs1 => mk .ld rd rs1 0 0
   | .sd rs2 rs1 => mk .sd 0 rs1 rs2 0
   | _ => mk .addi 0 0 0 0
@@ -282,7 +298,7 @@ def Ins.toT (pc : BitVec 64) (taken : Bool) (i : Ins) : TInstr :=
   | _ => mk .j 0 0 0 0
 
 def Ins.IsM : Ins → Prop
-  | .addi .. | .ori .. | .slli .. | .add .. | .sub .. | .ld .. | .sd .. => True
+  | .addi .. | .ori .. | .slli .. | .add .. | .sub .. | .slt .. | .and .. | .ld .. | .sd .. => True
   | _ => False
 
 theorem decodeFactM_toM (pc : BitVec 64) (i : Ins) (hi : i.IsM) :
@@ -333,6 +349,22 @@ theorem decodeFactM_toM (pc : BitVec 64) (i : Ins) (hi : i.IsM) :
     have e := encR_toNat 0x20 rs2 rs1 0 rd 0x33 (by omega) (by omega) (by omega)
     rw [show (Ins.toM pc (.sub rd rs1 rs2)).word = encR 0x20 rs2 rs1 0 rd 0x33 from rfl]
     rw [decode_rtype_gen _ s hp .SUB (xl_eq (by rw [e]; simp; omega) rfl)
+      (xl_eq (by rw [e]; simp; omega) rfl) (.inr ⟨xl_eq (by rw [e]; simp; omega) rfl, rfl⟩)]
+    rw [regidx_at20 rs2 _ (by rw [e]; omega), regidx_at15 rs1 _ (by rw [e]; omega),
+      regidx_at7 rd _ (by rw [e]; omega)]
+    rfl
+  | slt rd rs1 rs2 =>
+    have e := encR_toNat 0 rs2 rs1 2 rd 0x33 (by omega) (by omega) (by omega)
+    rw [show (Ins.toM pc (.slt rd rs1 rs2)).word = encR 0 rs2 rs1 2 rd 0x33 from rfl]
+    rw [decode_rtype_gen2 _ s hp .SLT (xl_eq (by rw [e]; simp; omega) rfl)
+      (xl_eq (by rw [e]; simp; omega) rfl) (.inl ⟨xl_eq (by rw [e]; simp; omega) rfl, rfl⟩)]
+    rw [regidx_at20 rs2 _ (by rw [e]; omega), regidx_at15 rs1 _ (by rw [e]; omega),
+      regidx_at7 rd _ (by rw [e]; omega)]
+    rfl
+  | and rd rs1 rs2 =>
+    have e := encR_toNat 0 rs2 rs1 7 rd 0x33 (by omega) (by omega) (by omega)
+    rw [show (Ins.toM pc (.and rd rs1 rs2)).word = encR 0 rs2 rs1 7 rd 0x33 from rfl]
+    rw [decode_rtype_gen2 _ s hp .AND (xl_eq (by rw [e]; simp; omega) rfl)
       (xl_eq (by rw [e]; simp; omega) rfl) (.inr ⟨xl_eq (by rw [e]; simp; omega) rfl, rfl⟩)]
     rw [regidx_at20 rs2 _ (by rw [e]; omega), regidx_at15 rs1 _ (by rw [e]; omega),
       regidx_at7 rd _ (by rw [e]; omega)]
@@ -570,6 +602,8 @@ theorem encode_rvc (i : Ins) :
   | slli rd rs1 sh => rw [Ins.encode, encI_toNat _ _ _ _ _ (by omega) (by omega)]; simp; omega
   | add => rw [Ins.encode, encR_toNat _ _ _ _ _ _ (by omega) (by omega) (by omega)]; simp; omega
   | sub => rw [Ins.encode, encR_toNat _ _ _ _ _ _ (by omega) (by omega) (by omega)]; simp; omega
+  | slt => rw [Ins.encode, encR_toNat _ _ _ _ _ _ (by omega) (by omega) (by omega)]; simp; omega
+  | and => rw [Ins.encode, encR_toNat _ _ _ _ _ _ (by omega) (by omega) (by omega)]; simp; omega
   | ld => rw [Ins.encode, encI_toNat _ _ _ _ _ (by omega) (by omega)]; simp; omega
   | sd => rw [Ins.encode, encS_toNat _ _ _ _ _ (by omega) (by omega)]; simp; omega
   | br op rs1 rs2 off =>

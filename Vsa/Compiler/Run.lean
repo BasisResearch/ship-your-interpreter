@@ -204,7 +204,7 @@ section
 variable {code : List Ins} {k : Nat} {A : AM}
 
 def Ins.IsAlu : Ins → Prop
-  | .addi .. | .ori .. | .slli .. | .add .. | .sub .. => True
+  | .addi .. | .ori .. | .slli .. | .add .. | .sub .. | .slt .. | .and .. => True
   | _ => False
 
 theorem exec_alu (i : Ins) (hi : i.IsAlu) (A : AM)
@@ -268,6 +268,36 @@ theorem step_sub (hfit : Fits code) {rd r1 r2 : Nat} {v w : BitVec 64}
   obtain ⟨h11, h12⟩ := h1.src; obtain ⟨h21, h22⟩ := h2.src
   rw [astep_pcOf hfit hk A hA]
   rw [exec_alu (.sub rd r1 r2) trivial A ⟨hrd, h11, h21⟩]
+  simp only [Ins.toM, stepGM, wvalM]
+  simp [h12, h22, hA, pcOf_succ, gset]
+
+def sltW (v w : BitVec 64) : BitVec 64 := if v.toInt < w.toInt then 1 else 0
+
+theorem slt_val (v w : BitVec 64) :
+    (zero_extend (m := 64) (bool_to_bit (zopz0zI_s v w)) : BitVec 64) = sltW v w := by
+  unfold sltW zopz0zI_s
+  by_cases h : v.toInt < w.toInt
+  · simp [h]; decide
+  · simp [h]; decide
+
+theorem step_slt (hfit : Fits code) {rd r1 r2 : Nat} {v w : BitVec 64}
+    (hk : code[k]? = some (.slt rd r1 r2)) (hA : A.pc = pcOf k)
+    (hrd : 1 ≤ rd ∧ rd ≤ 31) (h1 : Has A.regs r1 v) (h2 : Has A.regs r2 w) :
+    astep code A = some (.run ⟨pcOf (k + 1), gset A.regs rd (sltW v w), A.mem, A.out⟩) := by
+  obtain ⟨h11, h12⟩ := h1.src; obtain ⟨h21, h22⟩ := h2.src
+  rw [astep_pcOf hfit hk A hA]
+  rw [exec_alu (.slt rd r1 r2) trivial A ⟨hrd, h11, h21⟩]
+  simp only [Ins.toM, stepGM, wvalM]
+  rw [h12, h22, slt_val]
+  simp [hA, pcOf_succ, gset]
+
+theorem step_and (hfit : Fits code) {rd r1 r2 : Nat} {v w : BitVec 64}
+    (hk : code[k]? = some (.and rd r1 r2)) (hA : A.pc = pcOf k)
+    (hrd : 1 ≤ rd ∧ rd ≤ 31) (h1 : Has A.regs r1 v) (h2 : Has A.regs r2 w) :
+    astep code A = some (.run ⟨pcOf (k + 1), gset A.regs rd (v &&& w), A.mem, A.out⟩) := by
+  obtain ⟨h11, h12⟩ := h1.src; obtain ⟨h21, h22⟩ := h2.src
+  rw [astep_pcOf hfit hk A hA]
+  rw [exec_alu (.and rd r1 r2) trivial A ⟨hrd, h11, h21⟩]
   simp only [Ins.toM, stepGM, wvalM]
   simp [h12, h22, hA, pcOf_succ, gset]
 
