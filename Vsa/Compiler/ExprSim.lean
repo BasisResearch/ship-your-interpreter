@@ -1,5 +1,6 @@
 import Vsa.Compiler.Rel
 import Vsa.Compiler.R6Layout
+import Vsa.Compiler.CTRun
 
 namespace Vsa.Compiler
 
@@ -132,74 +133,21 @@ abbrev IsInt (v : Value) : Prop := ∃ n, v = .int n ∧ InRange n
 
 abbrev IsBool (v : Value) : Prop := ∃ b, v = .bool b
 
-section
-variable {code : List Ins}
+theorem sltW_ofInt {a b : Int} (ha : InRange a) (hb : InRange b) :
+    sltW (BitVec.ofInt 64 a) (BitVec.ofInt 64 b) = if decide (a < b) then 1 else 0 := by
+  simp [sltW, toInt_ofInt_range ha, toInt_ofInt_range hb]
 
-theorem run_cmp₀ (hfit : Fits code) {p r1 r2 : Nat} {b : BrOp} {A : AM} {x y : BitVec 64}
-    (hseg : Seg code p [.addi s3 0 1, .br b r1 r2 (bSkip 1), .addi s3 0 0, mv a0 s3])
-    (hA : A.pc = pcOf p) (hp : PosOK (p + 4))
-    (h1 : Has A.regs r1 x) (h2 : Has A.regs r2 y) (hr1 : r1 ≠ s3) (hr2 : r2 ≠ s3) :
-    ∃ L, Star code A ⟨pcOf (p + 4), L, A.mem, A.out⟩ ∧
-      Has L a0 (if guardB b.bop x y then 1 else 0) := by
-  have hb : codeBase = 0x80004800 := rfl
-  have ht : tohostAddr = 0x8001ad00 := rfl
-  have hone : (0 : BitVec 64) + (sign_extend (1 : BitVec 12) : BitVec 64) = 1 := by decide
-  have hzero : (0 : BitVec 64) + (sign_extend (0 : BitVec 12) : BitVec 64) = 0 := by decide
-  have hmv : ∀ v : BitVec 64, v + (sign_extend (0 : BitVec 12) : BitVec 64) = v := by
-    intro v; rw [show (sign_extend (0 : BitVec 12) : BitVec 64) = 0 by decide]; simp
-  have e1 := step_addi hfit hseg.head hA (by decide) (Has.zero _)
-  rw [hone] at e1
-  have hs := pcOf_skip (p + 1) 1 (by unfold PosOK at *; omega) (by decide)
-  have e2 := step_br hfit hseg.tail.head (A := ⟨pcOf (p + 1), gset A.regs s3 1, A.mem, A.out⟩) rfl
-    (h1.set_other hr1) (h2.set_other hr2)
-    (by rw [hs, pcOf_toNat (by unfold PosOK at *; omega)]; omega)
-  rw [hs] at e2
-  by_cases hg : guardB b.bop x y
-  · rw [if_pos hg] at e2
-    have e4 : astep code ⟨pcOf (p + 3), gset A.regs s3 1, A.mem, A.out⟩ =
-        some (.run ⟨pcOf (p + 4), gset (gset A.regs s3 1) a0 1, A.mem, A.out⟩) := by
-      rw [step_addi hfit (hseg.sub 3 1).head rfl (by decide)
-        (Has.set_self _ _ (by decide) (by decide)), hmv]
-    refine ⟨gset (gset A.regs s3 1) a0 1, Star.step e1 (Star.step ?_ (Star.single e4)), ?_⟩
-    · rw [e2]
-    · rw [if_pos hg]; exact Has.set_self _ _ (by decide) (by decide)
-  · rw [if_neg hg] at e2
-    have e3 : astep code ⟨pcOf (p + 2), gset A.regs s3 1, A.mem, A.out⟩ =
-        some (.run ⟨pcOf (p + 3), gset A.regs s3 0, A.mem, A.out⟩) := by
-      rw [step_addi hfit (hseg.sub 2 1).head rfl (by decide) (Has.zero _), hzero, gset_gset]
-    have e4 : astep code ⟨pcOf (p + 3), gset A.regs s3 0, A.mem, A.out⟩ =
-        some (.run ⟨pcOf (p + 4), gset (gset A.regs s3 0) a0 0, A.mem, A.out⟩) := by
-      rw [step_addi hfit (hseg.sub 3 1).head rfl (by decide)
-        (Has.set_self _ _ (by decide) (by decide)), hmv]
-    refine ⟨gset (gset A.regs s3 0) a0 0, Star.step e1 (Star.step ?_ (Star.step e3 (Star.single e4))), ?_⟩
-    · rw [e2]
-    · rw [if_neg hg]; exact Has.set_self _ _ (by decide) (by decide)
-
-end
-
-theorem guard_lt₀ {a b : Int} (ha : InRange a) (hb : InRange b) :
-    guardB bop.BLT (BitVec.ofInt 64 a) (BitVec.ofInt 64 b) = decide (a < b) := by
-  simp [guardB, zopz0zI_s, toInt_ofInt_range ha, toInt_ofInt_range hb]
-
-theorem guard_ge₀ {a b : Int} (ha : InRange a) (hb : InRange b) :
-    guardB bop.BGE (BitVec.ofInt 64 a) (BitVec.ofInt 64 b) = decide (a ≥ b) := by
-  simp [guardB, zopz0zKzJ_s, toInt_ofInt_range ha, toInt_ofInt_range hb]
-
-theorem guard_eq₀ {a b : Int} (ha : InRange a) (hb : InRange b) :
-    guardB bop.BEQ (BitVec.ofInt 64 a) (BitVec.ofInt 64 b) = decide (a = b) := by
-  simp only [guardB, beq_iff_eq]
+theorem nezW_sub {a b : Int} (ha : InRange a) (hb : InRange b) :
+    nezW (BitVec.ofInt 64 a - BitVec.ofInt 64 b) = if decide (a ≠ b) then 1 else 0 := by
+  unfold nezW
   by_cases h : a = b
   · subst h; simp
-  · have : BitVec.ofInt 64 a ≠ BitVec.ofInt 64 b := fun e => h ((ofInt_inj_range ha hb).mp e)
-    simp [h, this]
-
-theorem guard_ne₀ {a b : Int} (ha : InRange a) (hb : InRange b) :
-    guardB bop.BNE (BitVec.ofInt 64 a) (BitVec.ofInt 64 b) = decide (a ≠ b) := by
-  simp only [guardB]
-  by_cases h : a = b
-  · subst h; simp
-  · have : BitVec.ofInt 64 a ≠ BitVec.ofInt 64 b := fun e => h ((ofInt_inj_range ha hb).mp e)
-    simp [h, this]
+  · have : BitVec.ofInt 64 a - BitVec.ofInt 64 b ≠ 0 := by
+      intro e
+      exact h ((ofInt_inj_range ha hb).mp (by
+        have := congrArg (· + BitVec.ofInt 64 b) e
+        simpa [BitVec.sub_add_cancel] using this))
+    rw [if_neg this]; simp [h]
 
 theorem Has.cons_self (L : GRegs) (n : Nat) (v : BitVec 64) (h1 : 1 ≤ n) (h31 : n ≤ 31) :
     Has ((n, v) :: L) n v := ⟨h31, .inr ⟨by omega, by simp [lookupG]⟩⟩
@@ -220,21 +168,44 @@ def TailOK (op : BinOp) (a b : Int) (p len : Nat) (A B : AM) : Prop :=
   (∃ v, TailDone op a b p len A B v) ∨
     (astep code B = some (.halt 70) ∧ ∀ s, binOpSem s op (.int a) (.int b) = none)
 
-theorem sim_cmp (hfit : Fits code) {op : BinOp} {br : BrOp} {r1 r2 : Nat} {p : Nat} {A : AM}
-    {a b : Int} {c : Bool} (hcb : cmpBranch op = some (br, r1, r2))
-    (hsem : ∀ s, binOpSem s op (.int a) (.int b) = some (.bool c))
-    (hg : ∀ x y, Has A.regs r1 x → Has A.regs r2 y → guardB br.bop x y = c)
-    {x y : BitVec 64} (hx : Has A.regs r1 x) (hy : Has A.regs r2 y) (hr1 : r1 ≠ s3) (hr2 : r2 ≠ s3)
-    (hseg : Seg code p (cbin p op)) (hA : A.pc = pcOf p) (hpos : PosOK (p + (cbin p op).length))
-    (hcmp : CmpOp op) (hna : ¬ ArithOp op) :
-    Reaches code A (@TailOK code op a b p (cbin p op).length A) := by
-  have hc : cbin p op = [.addi s3 0 1, .br br r1 r2 (bSkip 1), .addi s3 0 0, mv a0 s3] := by
-    rcases hcmp with rfl|rfl|rfl|rfl|rfl|rfl <;> simp_all [cbin, cmpBranch]
-  rw [hc] at hseg hpos ⊢
-  obtain ⟨L, hs, hL⟩ := run_cmp₀ hfit hseg hA hpos hx hy hr1 hr2
-  refine ⟨_, hs, .inl ⟨.bool c, rfl, hsem, rfl, rfl, ?_, fun h => absurd h hna, fun _ => ⟨c, rfl⟩⟩⟩
-  rw [hg x y hx hy] at hL
-  cases c <;> simpa [word] using hL
+theorem tail_done {op : BinOp} {a b : Int} {p len : Nat} {A : AM} {v : Value}
+    (h : ∃ L, Star code A ⟨pcOf (p + len), L, A.mem, A.out⟩ ∧ Has L a0 (word v))
+    (hsem : ∀ s, binOpSem s op (.int a) (.int b) = some v)
+    (har : ArithOp op → IsInt v) (hcm : CmpOp op → IsBool v) :
+    Reaches code A (@TailOK code op a b p len A) := by
+  obtain ⟨L, hs, hl⟩ := h
+  exact ⟨_, hs, .inl ⟨v, rfl, hsem, rfl, rfl, hl, har, hcm⟩⟩
+
+theorem word_bool (c : Bool) : word (.bool c) = if c then 1 else 0 := rfl
+
+theorem sim_slt (hfit : Fits code) {r1 r2 p : Nat} {A : AM} {x y : BitVec 64}
+    (hseg : Seg code p [.slt a0 r1 r2]) (hA : A.pc = pcOf p)
+    (h1 : Has A.regs r1 x) (h2 : Has A.regs r2 y) :
+    ∃ L, Star code A ⟨pcOf (p + 1), L, A.mem, A.out⟩ ∧ Has L a0 (sltW x y) :=
+  ⟨_, Star.single (step_slt hfit hseg.head hA (by decide) h1 h2), Has.set_self _ _ (by decide) (by decide)⟩
+
+theorem sim_sltFlip (hfit : Fits code) {r1 r2 p : Nat} {A : AM} {a b : Int}
+    (hseg : Seg code p ([.slt a0 r1 r2] ++ flip)) (hA : A.pc = pcOf p)
+    (ha : InRange a) (hb : InRange b)
+    (h1 : Has A.regs r1 (BitVec.ofInt 64 a)) (h2 : Has A.regs r2 (BitVec.ofInt 64 b)) :
+    ∃ L, Star code A ⟨pcOf (p + 3), L, A.mem, A.out⟩ ∧ Has L a0 (if decide (a < b) then 0 else 1) := by
+  obtain ⟨s1, s2⟩ := hseg.append
+  obtain ⟨L, r1, hl⟩ := sim_slt hfit s1 hA h1 h2
+  rw [sltW_ofInt ha hb] at hl
+  obtain ⟨L', r2, hl'⟩ := run_flip hfit s2 (A := ⟨_, L, A.mem, A.out⟩) rfl hl
+  exact ⟨L', r1.trans r2, hl'⟩
+
+theorem sim_eqne (hfit : Fits code) {p : Nat} {A : AM} {a b : Int}
+    (hseg : Seg code p ([.sub a0 a0 a1] ++ nez)) (hA : A.pc = pcOf p)
+    (ha : InRange a) (hb : InRange b)
+    (h0 : Has A.regs a0 (BitVec.ofInt 64 a)) (h1 : Has A.regs a1 (BitVec.ofInt 64 b)) :
+    ∃ L, Star code A ⟨pcOf (p + 4), L, A.mem, A.out⟩ ∧ Has L a0 (if decide (a ≠ b) then 1 else 0) := by
+  obtain ⟨s1, s2⟩ := hseg.append
+  have e := step_sub hfit s1.head hA (by decide) h0 h1
+  obtain ⟨L, r2, hl⟩ := run_nez hfit s2 (A := ⟨_, _, A.mem, A.out⟩) rfl
+    (Has.set_self (rd := a0) _ (BitVec.ofInt 64 a - BitVec.ofInt 64 b) (by decide) (by decide))
+  rw [nezW_sub ha hb] at hl
+  exact ⟨L, Star.step e r2, hl⟩
 
 end
 
@@ -284,8 +255,9 @@ theorem sim_cbin (hL : Layout code) {op : BinOp} (hop : ArithOp op ∨ CmpOp op)
       simp only [word, ofInt_wrap64, this]
       exact Has.set_self (rd := a0) _ _ (by decide) (by decide)
     ·
-      obtain ⟨L, hs, hl⟩ := sim_lib (op := .mul) hfit hseg hA hpos (.inl rfl) h0 h1
-        (r := BitVec.ofInt 64 a * BitVec.ofInt 64 b) (by simp [libRes])
+      have hc : cbin p .mul = ctMul := rfl
+      rw [hc] at hseg hpos ⊢
+      obtain ⟨L, hs, hl⟩ := run_ctMul hfit hseg hA hpos h0 h1
       refine ⟨_, hs, .inl ⟨.int (wrap64 (a * b)), rfl, fun s => rfl, rfl, rfl, ?_,
         fun _ => ⟨_, rfl, InRange.wrap64 _⟩, fun h => absurd h hna⟩⟩
       simpa only [word, ofInt_wrap64, BitVec.ofInt_mul] using hl
@@ -359,43 +331,43 @@ theorem sim_cbin (hL : Layout code) {op : BinOp} (hop : ArithOp op ∨ CmpOp op)
         simpa only [word, ofInt_wrap64] using hl
   · have hna : ¬ ArithOp op := by
       rcases hop with rfl|rfl|rfl|rfl|rfl|rfl <;> simp [ArithOp]
+    have hb1 : ∀ c : Bool, (CmpOp op → IsBool (.bool c)) := fun c _ => ⟨c, rfl⟩
+    have hn1 : ∀ v, ArithOp op → IsInt v := fun _ h => absurd h hna
     rcases hop with rfl|rfl|rfl|rfl|rfl|rfl
-    · exact sim_cmp hfit (by rfl) (c := decide (a < b)) (fun s => rfl)
-        (fun x y hx hy => by
-          simp only [BrOp.bop]
-          rw [(hx.src.2.symm.trans h0.src.2 : x = _), (hy.src.2.symm.trans h1.src.2 : y = _)]
-          exact guard_lt₀ ha hb)
-        h0 h1 (by decide) (by decide) hseg hA hpos (.inl rfl) hna
-    · exact sim_cmp hfit (by rfl) (c := decide (a ≤ b)) (fun s => by simp [binOpSem])
-        (fun x y hx hy => by
-          simp only [BrOp.bop]
-          rw [(hx.src.2.symm.trans h1.src.2 : x = _), (hy.src.2.symm.trans h0.src.2 : y = _),
-            guard_ge₀ hb ha])
-        h1 h0 (by decide) (by decide) hseg hA hpos (.inr (.inl rfl)) hna
-    · exact sim_cmp hfit (by rfl) (c := decide (a > b)) (fun s => by simp [binOpSem])
-        (fun x y hx hy => by
-          simp only [BrOp.bop]
-          rw [(hx.src.2.symm.trans h1.src.2 : x = _), (hy.src.2.symm.trans h0.src.2 : y = _),
-            guard_lt₀ hb ha])
-        h1 h0 (by decide) (by decide) hseg hA hpos (.inr (.inr (.inl rfl))) hna
-    · exact sim_cmp hfit (by rfl) (c := decide (a ≥ b)) (fun s => by simp [binOpSem])
-        (fun x y hx hy => by
-          simp only [BrOp.bop]
-          rw [(hx.src.2.symm.trans h0.src.2 : x = _), (hy.src.2.symm.trans h1.src.2 : y = _),
-            guard_ge₀ ha hb])
-        h0 h1 (by decide) (by decide) hseg hA hpos (.inr (.inr (.inr (.inl rfl)))) hna
-    · exact sim_cmp hfit (by rfl) (c := decide (a = b)) (fun s => by simp [binOpSem, Value.equal]; rfl)
-        (fun x y hx hy => by
-          simp only [BrOp.bop]
-          rw [(hx.src.2.symm.trans h0.src.2 : x = _), (hy.src.2.symm.trans h1.src.2 : y = _),
-            guard_eq₀ ha hb])
-        h0 h1 (by decide) (by decide) hseg hA hpos (.inr (.inr (.inr (.inr (.inl rfl))))) hna
-    · exact sim_cmp hfit (by rfl) (c := decide (a ≠ b)) (fun s => by simp [binOpSem, Value.equal]; rfl)
-        (fun x y hx hy => by
-          simp only [BrOp.bop]
-          rw [(hx.src.2.symm.trans h0.src.2 : x = _), (hy.src.2.symm.trans h1.src.2 : y = _),
-            guard_ne₀ ha hb])
-        h0 h1 (by decide) (by decide) hseg hA hpos (.inr (.inr (.inr (.inr (.inr rfl))))) hna
+    · obtain ⟨L, hs, hl⟩ := sim_slt hfit hseg hA h0 h1
+      rw [sltW_ofInt ha hb, ← word_bool] at hl
+      exact tail_done ⟨L, hs, hl⟩ (fun s => rfl) (hn1 _) (hb1 _)
+    · obtain ⟨L, hs, hl⟩ := sim_sltFlip hfit hseg hA hb ha h1 h0
+      have : (if decide (b < a) then (0 : BitVec 64) else 1) = word (.bool (decide (a ≤ b))) := by
+        by_cases h : b < a
+        · simp [h, word, show ¬ a ≤ b by omega]
+        · simp [h, word, show a ≤ b by omega]
+      rw [this] at hl
+      exact tail_done ⟨L, hs, hl⟩ (fun s => by simp [binOpSem]) (hn1 _) (hb1 _)
+    · obtain ⟨L, hs, hl⟩ := sim_slt hfit hseg hA h1 h0
+      rw [sltW_ofInt hb ha, ← word_bool] at hl
+      exact tail_done ⟨L, hs, hl⟩ (fun s => by simp [binOpSem]) (hn1 _) (hb1 _)
+    · obtain ⟨L, hs, hl⟩ := sim_sltFlip hfit hseg hA ha hb h0 h1
+      have : (if decide (a < b) then (0 : BitVec 64) else 1) = word (.bool (decide (a ≥ b))) := by
+        by_cases h : a < b
+        · simp [h, word, show ¬ a ≥ b by omega]
+        · simp [h, word, show a ≥ b by omega]
+      rw [this] at hl
+      exact tail_done ⟨L, hs, hl⟩ (fun s => by simp [binOpSem]) (hn1 _) (hb1 _)
+    · have hseg' : Seg code p ([.sub a0 a0 a1] ++ nez ++ flip) := hseg
+      obtain ⟨s12, s3⟩ := hseg'.append
+      obtain ⟨L, r1, hl⟩ := sim_eqne hfit s12 hA ha hb h0 h1
+      obtain ⟨L', r2, hl'⟩ := run_flip hfit s3 (A := ⟨_, L, A.mem, A.out⟩) rfl hl
+      have : (if decide (a ≠ b) then (0 : BitVec 64) else 1) = word (.bool (decide (a = b))) := by
+        by_cases h : a = b
+        · simp [h, word]
+        · simp [h, word]
+      rw [this] at hl'
+      exact tail_done ⟨L', r1.trans r2, hl'⟩ (fun s => by simp [binOpSem, Value.equal]; rfl) (hn1 _)
+        (hb1 _)
+    · obtain ⟨L, hs, hl⟩ := sim_eqne hfit hseg hA ha hb h0 h1
+      rw [← word_bool] at hl
+      exact tail_done ⟨L, hs, hl⟩ (fun s => by simp [binOpSem, Value.equal]; rfl) (hn1 _) (hb1 _)
 
 end
 
@@ -659,28 +631,31 @@ theorem sim_not (hL : Layout code) {Γ : Scope} {e : Expr} (ih : SimE code Γ e)
     rcases hE with h | h
     · exact h.elim
     · exact h
-  have hcx : cexpr Γ k pos (.unary .not e) = cexpr Γ k pos e ++
-      [.addi s3 0 1, .br .eq a0 0 (bSkip 1), .addi s3 0 0, mv a0 s3] := rfl
+  have hcx : cexpr Γ k pos (.unary .not e) = cexpr Γ k pos e ++ (nez ++ flip) := by
+    simp [cexpr]
   rw [hcx] at hseg hpos
   obtain ⟨⟨hs1, p1⟩, hs2, p2⟩ := segP_app.mp ⟨hseg, hpos⟩
   obtain ⟨B1, r1, hB1⟩ := ih k pos st d env A hE' (by simpa [tdepth] using hk) hs1 p1 hA hc
   rcases hB1 with ⟨v, st', hev, hty, hout, hBo, hBpc, hB0, hBc, hBt⟩ | ⟨hh, hne⟩
-  · obtain ⟨L, r2, hL0⟩ := run_cmp₀ hL.1 hs2 hBpc p2 hB0 (Has.zero _) (by decide) (by decide)
-    have hg : guardB BrOp.eq.bop (word v) 0 = !v.truthy := by
+  · obtain ⟨s2a, s2b⟩ := hs2.append
+    obtain ⟨L, r2, hL0⟩ := run_nez hL.1 s2a hBpc hB0
+    have hg : nezW (word v) = if v.truthy then 1 else 0 := by
       rcases hE' with hi | hb
       · obtain ⟨n, rfl, hn⟩ := hty.1 hi
-        simp only [BrOp.bop, word, Value.truthy, guardB]
+        simp only [word, Value.truthy, nezW]
         by_cases h : n = 0
         · subst h; decide
         · have : BitVec.ofInt 64 n ≠ (0 : BitVec 64) := fun e => h (by
             have := congrArg BitVec.toInt e; rwa [toInt_ofInt_range hn] at this)
-          rw [beq_eq_false_iff_ne.mpr this]; simp [h]
+          rw [if_neg this]; simp [h]
       · obtain ⟨b, rfl⟩ := hty.2 hb
         cases b <;> decide
     rw [hg] at hL0
-    refine ⟨_, r1.trans r2, .inl ⟨.bool (!v.truthy), st', .not _ _ _ _ _ _ hev,
-      ⟨fun h => h.elim, fun _ => ⟨_, rfl⟩⟩, hout, hBo, by simp [hcx, Nat.add_assoc], ?_, hBc, hBt⟩⟩
-    cases hv : v.truthy <;> simp [word, hv] at hL0 ⊢ <;> exact hL0
+    obtain ⟨L', r3, hL1⟩ := run_flip hL.1 s2b (A := ⟨_, L, B1.mem, B1.out⟩) rfl hL0
+    refine ⟨_, r1.trans (r2.trans r3), .inl ⟨.bool (!v.truthy), st', .not _ _ _ _ _ _ hev,
+      ⟨fun h => h.elim, fun _ => ⟨_, rfl⟩⟩, hout, hBo, ?_, ?_, hBc, hBt⟩⟩
+    · simp [hcx, nez, flip, Nat.add_assoc]
+    · cases hv : v.truthy <;> simp [word, hv] at hL1 ⊢ <;> exact hL1
   · refine ⟨B1, r1, .inr ⟨hh, fun v st' h => ?_⟩⟩
     cases h with | not _ _ _ _ _ _ he => exact hne _ _ he
 

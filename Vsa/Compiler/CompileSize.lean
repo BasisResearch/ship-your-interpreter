@@ -9,8 +9,8 @@ def exprSize : Expr → Nat
   | .bool _ => 1
   | .var _ => 12
   | .assign _ e => exprSize e + 12
-  | .binary _ l r => exprSize l + exprSize r + 30
-  | .unary _ e => exprSize e + 4
+  | .binary _ l r => exprSize l + exprSize r + 36
+  | .unary _ e => exprSize e + 5
   | _ => 0
 
 def argsSize : List Expr → Nat
@@ -42,8 +42,8 @@ theorem putc_length_le (c : Char) : (putc c).length ≤ 23 := by
   have h2 := li_length_le s2 tohostW
   simp only [putc, List.length_append, List.length_cons, List.length_nil]; omega
 
-theorem cbin_length_le (p : Nat) (op : BinOp) : (cbin p op).length ≤ 5 := by
-  cases op <;> simp [cbin, libc, cmpBranch]
+theorem cbin_length_le (p : Nat) (op : BinOp) : (cbin p op).length ≤ 11 := by
+  cases op <;> simp [cbin, libc, ctMul, nez, flip]
 
 theorem cexpr_length_le (Γ : Scope) : ∀ (e : Expr) (k pos : Nat), (cexpr Γ k pos e).length ≤ exprSize e
   | .int n, _, _ => li_length_le _ _
@@ -69,7 +69,7 @@ theorem cexpr_length_le (Γ : Scope) : ∀ (e : Expr) (k pos : Nat), (cexpr Γ k
     omega
   | .unary op e, k, pos => by
     have := cexpr_length_le Γ e k pos
-    cases op <;> simp only [cexpr, exprSize, List.length_append, List.length_cons, List.length_nil] <;> omega
+    cases op <;> simp only [cexpr, exprSize, nez, flip, List.length_append, List.length_cons, List.length_nil] <;> omega
   | .str _, _, _ => by simp [cexpr]
   | .null, _, _ => by simp [cexpr]
   | .logical _ _ _, _, _ => by simp [cexpr]

@@ -1,4 +1,4 @@
-import Vsa.Compiler.Gen
+import Vsa.Compiler.CTOps
 import Vsa.While.Semantics
 
 namespace Vsa.Compiler
@@ -15,24 +15,18 @@ def Scope.resolve : Scope → String → Option Nat
     | some i => some i
     | none => Scope.resolve g x
 
-def cmpBranch : BinOp → Option (BrOp × Nat × Nat)
-  | .lt => some (.lt, a0, a1)
-  | .le => some (.ge, a1, a0)
-  | .gt => some (.lt, a1, a0)
-  | .ge => some (.ge, a0, a1)
-  | .eq => some (.eq, a0, a1)
-  | .ne => some (.ne, a0, a1)
-  | _ => none
-
 def cbin (pos : Nat) : BinOp → List Ins
   | .add => [.add a0 a0 a1]
   | .sub => [.sub a0 a0 a1]
-  | .mul => libc pos mulPC
+  | .mul => ctMul
   | .div => [.br .ne a1 0 (bSkip 1), .jal 0 (jOff (pos + 1) errPos)] ++ libc (pos + 2) divPC
   | .mod => [.br .ne a1 0 (bSkip 1), .jal 0 (jOff (pos + 1) errPos)] ++ libc (pos + 2) modPC
-  | op => match cmpBranch op with
-    | some (b, r1, r2) => [.addi s3 0 1, .br b r1 r2 (bSkip 1), .addi s3 0 0, mv a0 s3]
-    | none => []
+  | .lt => [.slt a0 a0 a1]
+  | .gt => [.slt a0 a1 a0]
+  | .le => [.slt a0 a1 a0] ++ flip
+  | .ge => [.slt a0 a0 a1] ++ flip
+  | .eq => [.sub a0 a0 a1] ++ nez ++ flip
+  | .ne => [.sub a0 a0 a1] ++ nez
 
 def cexpr (Γ : Scope) (k pos : Nat) : Expr → List Ins
   | .int n => li a0 (BitVec.ofInt 64 n)
@@ -49,8 +43,7 @@ def cexpr (Γ : Scope) (k pos : Nat) : Expr → List Ins
     let ld := [mv a1 a0] ++ liN s2 (tempAddr k) ++ [.ld a0 s2]
     cl ++ st ++ cr ++ ld ++ cbin (p1 + cr.length + ld.length) op
   | .unary .neg e => cexpr Γ k pos e ++ [.sub a0 0 a0]
-  | .unary .not e =>
-    cexpr Γ k pos e ++ [.addi s3 0 1, .br .eq a0 0 (bSkip 1), .addi s3 0 0, mv a0 s3]
+  | .unary .not e => cexpr Γ k pos e ++ nez ++ flip
   | _ => []
 
 structure Ctx where

@@ -46,7 +46,7 @@ theorem cexpr_pos (Γ : Scope) : ∀ (e : Expr) (k pos : Nat), Simple e →
     have := cexpr_pos Γ l k pos hs.1
     simp only [cexpr, List.length_append]; omega
   | .unary .neg e, k, pos, hs => by simp [cexpr]
-  | .unary .not e, k, pos, hs => by simp [cexpr]
+  | .unary .not e, k, pos, hs => by simp [cexpr, nez, flip]
   | .str _, _, _, h => h.elim
   | .null, _, _, h => h.elim
   | .logical _ _ _, _, _, h => h.elim
