@@ -119,6 +119,7 @@ import Vsa.Sim.DivLoopsT
 import Vsa.Sim.DivSpec3T
 import Vsa.Sim.DivT
 import Vsa.Sim.DivWrapT
+import Vsa.Sim.MulT
 import Vsa.Sim.RunT
 import Vsa.Sim.SegTrace
 import Vsa.While.Exclusive
