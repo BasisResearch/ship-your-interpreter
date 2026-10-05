@@ -8,7 +8,6 @@ open Vsa.Machine (MState Config Step Steps RunT)
 open Vsa.Logic
 open Vsa.Sim.Code (__hidden___udivdi3Loaded)
 
-set_option maxHeartbeats 8000000
 set_option maxRecDepth 1000000
 
 namespace Vsa.Sim
