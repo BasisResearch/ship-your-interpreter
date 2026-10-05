@@ -8,7 +8,7 @@ open LeanRV64DExecutable LeanRV64DExecutable.Functions Sail Vsa.Sim
 structure Obs where
   pc : BitVec 64
   ea : Option Nat
-  lib : Option (BitVec 64 × BitVec 64)
+  lib : Option (Nat × BitVec 64 × BitVec 64)
   deriving DecidableEq
 
 def isLibT (t : Nat) : Prop := t = mulPC ∨ t = divPC ∨ t = modPC
@@ -21,7 +21,7 @@ def insObs (i : Ins) (A : AM) : Obs :=
   | .sd _ rs => ⟨A.pc, some (srcVal rs A.regs).toNat, none⟩
   | .jal rd off =>
     if rd = 1 ∧ isLibT (A.pc + sign_extend (m := 64) (evenJ off)).toNat then
-      ⟨A.pc, none, some (srcVal 10 A.regs, srcVal 11 A.regs)⟩
+      ⟨A.pc, none, some ((A.pc + sign_extend (m := 64) (evenJ off)).toNat, srcVal 10 A.regs, srcVal 11 A.regs)⟩
     else ⟨A.pc, none, none⟩
   | _ => ⟨A.pc, none, none⟩
 
@@ -40,7 +40,7 @@ abbrev ReachesT (code : List Ins) (A : AM) (τ : List Obs) (P : AM → Prop) : P
 
 def pobs (k : Nat) : Obs := ⟨pcOf k, none, none⟩
 def mobs (k a : Nat) : Obs := ⟨pcOf k, some a, none⟩
-def lobs (k : Nat) (x y : BitVec 64) : Obs := ⟨pcOf k, none, some (x, y)⟩
+def lobs (k t : Nat) (x y : BitVec 64) : Obs := ⟨pcOf k, none, some (t, x, y)⟩
 
 def lin (k : Nat) : Nat → List Obs
   | 0 => []

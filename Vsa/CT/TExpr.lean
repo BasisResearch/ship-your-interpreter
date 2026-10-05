@@ -12,9 +12,13 @@ def cbinTr (p : Nat) (op : BinOp) (d : Option (Int × Int)) : List Obs :=
   | .eq => lin p 6
   | .ne => lin p 4
   | .mul => mulTr p
-  | .div | .mod =>
+  | .div =>
     match d with
-    | some (a, b) => [pobs p, pobs (p + 2), pobs (p + 3), lobs (p + 4) (BitVec.ofInt 64 a) (BitVec.ofInt 64 b)]
+    | some (a, b) => [pobs p, pobs (p + 2), pobs (p + 3), lobs (p + 4) divPC (BitVec.ofInt 64 a) (BitVec.ofInt 64 b)]
+    | none => []
+  | .mod =>
+    match d with
+    | some (a, b) => [pobs p, pobs (p + 2), pobs (p + 3), lobs (p + 4) modPC (BitVec.ofInt 64 a) (BitVec.ofInt 64 b)]
     | none => []
 
 def etr (Γ : Scope) (k pos : Nat) : Expr → EL → List Obs

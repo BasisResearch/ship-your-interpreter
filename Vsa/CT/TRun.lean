@@ -119,13 +119,13 @@ theorem run_stAT (hfit : Fits code) {a rs : Nat} {w : BitVec 64}
   simp only [insObs, hs.src.2, hat] at this
   exact this
 
-def libcTr (p : Nat) (x y : BitVec 64) : List Obs := [pobs p, pobs (p + 1), lobs (p + 2) x y]
+def libcTr (p t : Nat) (x y : BitVec 64) : List Obs := [pobs p, pobs (p + 1), lobs (p + 2) t x y]
 
 theorem run_libcT (hfit : Fits code) {tgt : Nat} {x y r : BitVec 64}
     (hseg : Seg code pos (libc pos tgt)) (hA : A.pc = pcOf pos) (hp : PosOK (pos + 3))
     (ht : tgt = mulPC ∨ tgt = divPC ∨ tgt = modPC)
     (hx : Has A.regs 10 x) (hy : Has A.regs 11 y) (hr : libRes tgt x y = some r) :
-    StarT code (libcTr pos x y) A ⟨pcOf (pos + 3), (10, r) :: eraseAll clobbered
+    StarT code (libcTr pos tgt x y) A ⟨pcOf (pos + 3), (10, r) :: eraseAll clobbered
       (gset (gset A.regs 12 0) 13 0), A.mem, A.out⟩ := by
   have hb : codeBase = 0x80004800 := rfl
   have htt : tohostAddr = 0x8001ad00 := rfl
@@ -173,7 +173,8 @@ theorem run_libcT (hfit : Fits code) {tgt : Nat} {x y r : BitVec 64}
   have hlib : isLibT (pcOf (pos + 2) + (sign_extend (evenJ (BitVec.ofInt 21 ((tgt : Int) -
       (codeBase + 4 * (pos + 2))))) : BitVec 64)).toNat := by
     rw [htgt, htn]; exact ht
-  simp only [insObs, ra, hlib, and_self, if_true, hx', hy'] at s3
+  have hlib' : isLibT tgt := ht
+  simp only [insObs, ra, hx', hy', htgt, htn, true_and, hlib', if_true] at s3
   exact stepP hfit hseg.head trivial hA e1 (stepP hfit hseg.tail.head trivial rfl e2 s3)
 
 def putcTr (p : Nat) (c : BitVec 8) : List Obs :=
