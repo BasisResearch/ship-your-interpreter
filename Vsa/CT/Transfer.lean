@@ -55,4 +55,16 @@ theorem ct_machine' {sec : String → Bool} {body : Program} {ins1 ins2 : List (
   ct_machine hct hnat hlow hsup1 (sup_transfer sec body hlow _ _ hsup1) hfit1
     (by rw [← len_transfer sec body hlow]; exact hfit1) hb1 hb2 hh1
 
+theorem ct_machine_pub' {sec : String → Bool} {body : Program} {ins1 ins2 : List (String × Int)}
+    (hct : ctSeqPub sec body = true) (hnat : ∀ p ∈ ins1, isNat p.1 = false) (hlow : LowIns sec ins1 ins2)
+    (hsup1 : Supported (prog sec ins1 body))
+    (hfit1 : 0x80004800 + 4 * (compile (prog sec ins1 body)).length ≤ 0x8001ad00)
+    {c1 c2 : Config} (hb1 : Boot (prog sec ins1 body) c1) (hb2 : Boot (prog sec ins2 body) c2)
+    {o1 : String} (hh1 : Halts c1 o1 0) :
+    Halts c2 o1 0 ∧ ∃ T : List (BitVec 64),
+      (∃ c' σf, RunT c1 T c' ∧ Halted c' 0 σf ∧ output σf = o1) ∧
+      (∃ c' σf, RunT c2 T c' ∧ Halted c' 0 σf ∧ output σf = o1) :=
+  ct_machine_pub hct hnat hlow hsup1 (sup_transfer sec body hlow _ _ hsup1) hfit1
+    (by rw [← len_transfer sec body hlow]; exact hfit1) hb1 hb2 hh1
+
 end Vsa.Compiler

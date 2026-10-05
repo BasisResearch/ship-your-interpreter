@@ -91,4 +91,23 @@ theorem ct_machine {sec : String → Bool} {body : Program} {ins1 ins2 : List (S
   exact ⟨heq, sailTr libTr τ, hb1.run hfit1 fun m os h => (hτ m os h).1,
     hb2.run hfit2 fun m os h => (hτ m os h).2⟩
 
+theorem ct_machine_pub {sec : String → Bool} {body : Program} {ins1 ins2 : List (String × Int)}
+    (hct : ctSeqPub sec body = true) (hnat : ∀ p ∈ ins1, isNat p.1 = false) (hlow : LowIns sec ins1 ins2)
+    (hsup1 : Supported (prog sec ins1 body)) (hsup2 : Supported (prog sec ins2 body))
+    (hfit1 : 0x80004800 + 4 * (compile (prog sec ins1 body)).length ≤ 0x8001ad00)
+    (hfit2 : 0x80004800 + 4 * (compile (prog sec ins2 body)).length ≤ 0x8001ad00)
+    {c1 c2 : Config} (hb1 : Boot (prog sec ins1 body) c1) (hb2 : Boot (prog sec ins2 body) c2)
+    {o1 : String} (hh1 : Halts c1 o1 0) :
+    Halts c2 o1 0 ∧ ∃ T : List (BitVec 64),
+      (∃ c' σf, RunT c1 T c' ∧ Halted c' 0 σf ∧ output σf = o1) ∧
+      (∃ c' σf, RunT c2 T c' ∧ Halted c' 0 σf ∧ output σf = o1) := by
+  have cc1 := compile_correct _ hsup1 hfit1 c1 hb1.good hb1.tick hb1.pc hb1.pw hb1.out hb1.code hb1.lib
+  have cc2 := compile_correct _ hsup2 hfit2 c2 hb2.good hb2.tick hb2.pc hb2.pw hb2.out hb2.code hb2.lib
+  obtain ⟨ℓ, h1⟩ := (bigStep_iff_L _ _).mp ((cc1.1 o1).mpr hh1)
+  obtain ⟨o2, h2, rfl⟩ := ct_sound_pub hct hnat hlow h1
+  have hh2 : Halts c2 o2 0 := (cc2.1 o2).mp ((bigStep_iff_L _ _).mpr ⟨ℓ, h2⟩)
+  obtain ⟨τ, hτ⟩ := am_ct_core hlow hsup1 hsup2 hfit1 hfit2 h1 h2
+  exact ⟨hh2, sailTr libTr τ, hb1.run hfit1 fun m os h => (hτ m os h).1,
+    hb2.run hfit2 fun m os h => (hτ m os h).2⟩
+
 end Vsa.Compiler

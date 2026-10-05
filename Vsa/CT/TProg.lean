@@ -184,6 +184,36 @@ theorem prog_leak (sec : String → Bool) (body : Program) : ∀ (ins : List (St
     obtain ⟨ℓb, rfl⟩ := prog_leak sec body r hseq
     exact ⟨ℓb, rfl⟩
 
+theorem am_ct_core {sec : String → Bool} {body : Program} {ins1 ins2 : List (String × Int)}
+    (hlow : LowIns sec ins1 ins2)
+    (hsup1 : Supported (prog sec ins1 body)) (hsup2 : Supported (prog sec ins2 body))
+    (hfit1 : Fits (compile (prog sec ins1 body))) (hfit2 : Fits (compile (prog sec ins2 body)))
+    {o1 o2 : String} {ℓ : List SL} (h1 : BigStepL (prog sec ins1 body) o1 ℓ)
+    (h2 : BigStepL (prog sec ins2 body) o2 ℓ) :
+    ∃ τ : List Obs, ∀ (m : Mem) (o : Array String), String.join o.toList = "" →
+      (∃ B, StarT (compile (prog sec ins1 body)) τ (A0 m o) B ∧
+        astep (compile (prog sec ins1 body)) B = some (.halt 0) ∧ String.join B.out.toList = o1) ∧
+      (∃ B, StarT (compile (prog sec ins2 body)) τ (A0 m o) B ∧
+        astep (compile (prog sec ins2 body)) B = some (.halt 0) ∧ String.join B.out.toList = o2) := by
+  obtain ⟨st1, D1, hout1⟩ := h1
+  obtain ⟨st2, D2, hout2⟩ := h2
+  obtain ⟨ℓb, hℓ⟩ := prog_leak sec body ins1 D1
+  obtain ⟨i1, i2, i3, i4⟩ := prefix_inv sec hlow ctx0 mainPos₀
+  have D2' : ExecSeqL initSt 0 0 (prog sec ins2 body) st2 .normal (inLs sec ins2 ++ ℓb) := by
+    rw [← i4, ← hℓ]; exact D2
+  rw [hℓ] at D1
+  obtain ⟨τb, hτb⟩ := seqTr printSpec ℓb (ctxAfter ctx0 ins1) (posAfter sec ctx0 mainPos₀ ins1) body
+  have hW1 : QTrW τb (ctxAfter ctx0 ins1) (posAfter sec ctx0 mainPos₀ ins1) body ℓb := hτb
+  have hW2 : QTrW τb (ctxAfter ctx0 ins2) (posAfter sec ctx0 mainPos₀ ins2) body ℓb := by
+    rw [← i1, ← i2]; exact hτb
+  have htr : progTr sec ins2 body τb = progTr sec ins1 body τb := by
+    simp only [progTr, i1, i2, i3]
+  refine ⟨progTr sec ins1 body τb, fun m o ho => ⟨?_, ?_⟩⟩
+  · obtain ⟨B, r, hh, hB⟩ := run_progT hW1 hsup1 hfit1 m o ho D1
+    exact ⟨B, r, hh, hB.trans hout1⟩
+  · obtain ⟨B, r, hh, hB⟩ := run_progT hW2 hsup2 hfit2 m o ho D2'
+    exact ⟨B, htr ▸ r, hh, hB.trans hout2⟩
+
 theorem am_ct {sec : String → Bool} {body : Program} {ins1 ins2 : List (String × Int)}
     (hct : ctSeq sec body = true) (hnat : ∀ p ∈ ins1, isNat p.1 = false) (hlow : LowIns sec ins1 ins2)
     (hsup1 : Supported (prog sec ins1 body)) (hsup2 : Supported (prog sec ins2 body))

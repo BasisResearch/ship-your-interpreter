@@ -202,19 +202,29 @@ theorem evalArgsL_ni (sec : String → Bool) : ∀ (args : List Expr) {st1 st2 :
     {env : Addr} {st1' : St} {vs1 : List Value} {ls : List EL}, args.all (intArg sec) = true →
     Low sec st1 st2 → EvalArgsL st1 d env args st1' vs1 ls →
     ∃ st2' vs2, EvalArgsL st2 d env args st2' vs2 ls ∧ Low sec st1' st2' ∧ st1'.out = st1.out ∧
-      st2'.out = st2.out ∧ (∀ v ∈ vs1, ∃ n, v = .int n) ∧ (∀ v ∈ vs2, ∃ n, v = .int n)
+      st2'.out = st2.out ∧ (∀ v ∈ vs1, ∃ n, v = .int n) ∧ (∀ v ∈ vs2, ∃ n, v = .int n) ∧
+      (args.all (pubArg sec) = true → vs1 = vs2)
   | [], _, st2, _, _, _, _, _, _, hlow, h => by
     cases h
-    exact ⟨st2, [], .nil .., hlow, rfl, rfl, by simp, by simp⟩
+    exact ⟨st2, [], .nil .., hlow, rfl, rfl, by simp, by simp, fun _ => rfl⟩
   | e :: es, _, st2, _, _, _, _, _, hall, hlow, h => by
     cases h with
     | cons _ _ _ _ _ st1' _ v1 vs1 l ls he hes =>
       simp only [List.all_cons, Bool.and_eq_true] at hall
       obtain ⟨lab, hce⟩ := intArg_ct hall.1
-      obtain ⟨st2', v2, he2, hlow', ho1, ho2, -, hv1, hv2⟩ := evalL_ni sec e hce hlow he
-      obtain ⟨st2'', vs2, hes2, hlow'', ho1', ho2', hvs1, hvs2⟩ := evalArgsL_ni sec es hall.2 hlow' hes
+      obtain ⟨st2', v2, he2, hlow', ho1, ho2, heq, hv1, hv2⟩ := evalL_ni sec e hce hlow he
+      obtain ⟨st2'', vs2, hes2, hlow'', ho1', ho2', hvs1, hvs2, hpub⟩ :=
+        evalArgsL_ni sec es hall.2 hlow' hes
       refine ⟨st2'', v2 :: vs2, .cons _ _ _ _ _ _ _ _ _ _ _ he2 hes2, hlow'', ho1'.trans ho1,
-        ho2'.trans ho2, ?_, ?_⟩
+        ho2'.trans ho2, ?_, ?_, fun hp => ?_⟩
+      rotate_left 2
+      · simp only [List.all_cons, Bool.and_eq_true] at hp
+        have hl : lab = false := by
+          have := hp.1; unfold pubArg at this; rw [hce] at this
+          cases lab
+          · rfl
+          · simp at this
+        rw [heq hl, hpub hp.2]
       · intro v hv; rcases List.mem_cons.mp hv with rfl | hv
         · exact hv1
         · exact hvs1 v hv

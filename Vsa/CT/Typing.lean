@@ -77,6 +77,29 @@ def ctSeq (sec : String → Bool) : List Stmt → Bool
 
 end
 
+def pubArg (sec : String → Bool) (e : Expr) : Bool :=
+  match ctE sec e with
+  | some (_, false) => true
+  | _ => false
+
+mutual
+
+def ppS (sec : String → Bool) : Stmt → Bool
+  | .expr (.call (.var _) args) => args.all (pubArg sec)
+  | .block ss => ppSeq sec ss
+  | .ifStmt _ t none => ppS sec t
+  | .ifStmt _ t (some e) => ppS sec t && ppS sec e
+  | .whileStmt _ b => ppS sec b
+  | _ => true
+
+def ppSeq (sec : String → Bool) : List Stmt → Bool
+  | [] => true
+  | s :: ss => ppS sec s && ppSeq sec ss
+
+end
+
+def ctSeqPub (sec : String → Bool) (body : Program) : Bool := ctSeq sec body && ppSeq sec body
+
 mutual
 
 def EL.skel : EL → EL

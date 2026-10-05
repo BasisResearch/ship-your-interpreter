@@ -125,10 +125,11 @@ theorem ct_prefix (sec : String → Bool) (body : Program) (hct : ctSeq sec body
     ∀ {st1 st2 : St} {d : Nat} {env : Addr} {st1' : St} {t : Status} {ℓ1 : List SL},
     Low sec st1 st2 → ExecSeqL st1 d env (prog sec ins1 body) st1' t ℓ1 →
     ∃ st2' ℓ2, ExecSeqL st2 d env (prog sec ins2 body) st2' t ℓ2 ∧ skelSs ℓ1 = skelSs ℓ2 ∧
-      (st1.out = st2.out → outsSs ℓ1 = outsSs ℓ2 → st1'.out = st2'.out)
+      (st1.out = st2.out → outsSs ℓ1 = outsSs ℓ2 → st1'.out = st2'.out) ∧
+      (ppSeq sec body = true → outsSs ℓ1 = outsSs ℓ2)
   | _, _, .nil, _, _, _, _, _, _, _, _, hlow, h => by
-    obtain ⟨st2', ℓ2, h2, -, hsk, hout⟩ := execSeqL_ni sec h hct hlow
-    exact ⟨st2', ℓ2, h2, hsk, hout⟩
+    obtain ⟨st2', ℓ2, h2, -, hsk, hout, hpp⟩ := execSeqL_ni sec h hct hlow
+    exact ⟨st2', ℓ2, h2, hsk, hout, hpp⟩
   | _, _, .cons (x := x) (a := a) (b := b) (l1 := l1) (l2 := l2) hab hrest, hnat, st1, st2, d, env,
       st1', t, _, hlow, h => by
     have hx : isNat x = false := hnat (x, a) (List.mem_cons_self ..)
@@ -147,9 +148,10 @@ theorem ct_prefix (sec : String → Bool) (body : Program) (hct : ctSeq sec body
       obtain ⟨-, -, z2', hz2', hz2b⟩ := input_leak sec x b (hev2 st2 d env)
       cases hz2'
       rw [hz1 hs, hz2b hs, hab hs]
-    obtain ⟨st2', ℓ2, h2, hsk, hout⟩ := ct_prefix sec body hct hrest hnat' hlow' hseq1
+    obtain ⟨st2', ℓ2, h2, hsk, hout, hpp⟩ := ct_prefix sec body hct hrest hnat' hlow' hseq1
     refine ⟨st2', _, .consNormal _ _ _ _ _ _ _ _ _ _ (.varInit _ _ _ _ _ _ _ _ (hev2 st2 d env)) h2,
-      by simp [skelSs, SL.skel, hsk], fun ho hos => ?_⟩
+      by simp [skelSs, SL.skel, hsk], fun ho hos => ?_, fun hp => by
+        simp only [outsSs]; rw [hpp hp]⟩
     simp only [outsSs, SL.outs] at hos
     obtain ⟨-, e2⟩ := List.append_inj hos (by rfl)
     exact hout ho e2
@@ -180,8 +182,21 @@ theorem ct_sound {sec : String → Bool} {body : Program} {ins1 ins2 : List (Str
     ∃ o2 ℓ2, BigStepL (prog sec ins2 body) o2 ℓ2 ∧ skelSs ℓ1 = skelSs ℓ2 ∧
       (outsSs ℓ1 = outsSs ℓ2 → ℓ1 = ℓ2 ∧ o1 = o2) := by
   obtain ⟨st1', h, rfl⟩ := h1
-  obtain ⟨st2', ℓ2, h2, hsk, hout⟩ := ct_prefix sec body hct hlow hnat
+  obtain ⟨st2', ℓ2, h2, hsk, hout, -⟩ := ct_prefix sec body hct hlow hnat
     ⟨lowS_refl sec _, good_init, good_init⟩ h
   exact ⟨st2'.out, ℓ2, ⟨st2', h2, rfl⟩, hsk, fun ho => ⟨skel_outs_inj hsk ho, hout rfl ho⟩⟩
+
+theorem ct_sound_pub {sec : String → Bool} {body : Program} {ins1 ins2 : List (String × Int)}
+    (hct : ctSeqPub sec body = true) (hnat : ∀ p ∈ ins1, isNat p.1 = false) (hlow : LowIns sec ins1 ins2)
+    {o1 : String} {ℓ1 : List SL} (h1 : BigStepL (prog sec ins1 body) o1 ℓ1) :
+    ∃ o2, BigStepL (prog sec ins2 body) o2 ℓ1 ∧ o2 = o1 := by
+  simp only [ctSeqPub, Bool.and_eq_true] at hct
+  obtain ⟨st1', h, rfl⟩ := h1
+  obtain ⟨st2', ℓ2, h2, hsk, hout, hpp⟩ := ct_prefix sec body hct.1 hlow hnat
+    ⟨lowS_refl sec _, good_init, good_init⟩ h
+  have ho := hpp hct.2
+  have hl := skel_outs_inj hsk ho
+  subst hl
+  exact ⟨st2'.out, ⟨st2', h2, rfl⟩, (hout rfl ho).symm⟩
 
 end Vsa.CT

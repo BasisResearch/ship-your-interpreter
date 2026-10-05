@@ -178,4 +178,45 @@ theorem lad_halts {c : Vsa.Machine.Config} (hb : Boot (prog ladSec (ladIns [1, 0
     (by rw [← len_transfer _ _ (lad_low [0, 0, 0, 0, 0, 0, 0, 0] [1, 0, 1, 1, 0, 1, 0, 1] rfl rfl)];
         exact lad_fit) c hb.good hb.tick hb.pc hb.pw hb.out hb.code hb.lib).1 _).mp lad_valid
 
+def ladPubBody : Program :=
+  [.varDecl "r0" (some (i 1)), .varDecl "r1" (some (v "x")), .varDecl "d" (some (i 0))] ++
+    ladBits.flatMap ladStep ++ [.expr (.call (v "println") [i 1])]
+
+theorem ladPub_ct : ctSeqPub ladSec ladPubBody = true := by decide
+
+theorem ladPub_sup : Supported (prog ladSec (ladIns [0, 0, 0, 0, 0, 0, 0, 0]) ladPubBody) := by
+  simp [Supported, prog, inDecl, ladIns, ladSec, ladPubBody, ladBits, ladStep, cswap, SupSeq, SupS, IntE,
+    BoolE, CondE, v, i, set, add, sub, mul, NScope.declare, NScope.Mem, IsNative, InRange, ArithOp, SupArgs,
+    maxArgs, encLit, encAux, chunkI]
+
+theorem ladPub_fit :
+    0x80004800 + 4 * (compile (prog ladSec (ladIns [0, 0, 0, 0, 0, 0, 0, 0]) ladPubBody)).length ≤
+      0x8001ad00 := by
+  have := compile_length_le (prog ladSec (ladIns [0, 0, 0, 0, 0, 0, 0, 0]) ladPubBody)
+  have hs : seqSize (prog ladSec (ladIns [0, 0, 0, 0, 0, 0, 0, 0]) ladPubBody) ≤ 20000 := by decide
+  omega
+
+theorem ladPub_machine (k k' : List Int) (hk : k.length = 8) (hk' : k'.length = 8)
+    {c1 c2 : Vsa.Machine.Config} (hb1 : Boot (prog ladSec (ladIns k) ladPubBody) c1)
+    (hb2 : Boot (prog ladSec (ladIns k') ladPubBody) c2) {o : String} (hh1 : Vsa.Machine.Halts c1 o 0) :
+    Vsa.Machine.Halts c2 o 0 ∧ ∃ T : List (BitVec 64),
+      (∃ c' σf, Vsa.Machine.RunT c1 T c' ∧ Vsa.Machine.Halted c' 0 σf ∧ Vsa.Machine.output σf = o) ∧
+      (∃ c' σf, Vsa.Machine.RunT c2 T c' ∧ Vsa.Machine.Halted c' 0 σf ∧ Vsa.Machine.output σf = o) := by
+  have hnat : ∀ p ∈ ladIns k, isNat p.1 = false := by
+    match k, hk with
+    | [_, _, _, _, _, _, _, _], _ => simp [ladIns, ladBits, isNat]
+  exact ct_machine_pub' ladPub_ct hnat (lad_low k k' hk hk')
+    (sup_transfer _ _ (lad_low [0, 0, 0, 0, 0, 0, 0, 0] k rfl hk) _ _ ladPub_sup)
+    (by rw [← len_transfer _ _ (lad_low [0, 0, 0, 0, 0, 0, 0, 0] k rfl hk)]; exact ladPub_fit) hb1 hb2 hh1
+
+theorem ladPub_valid : BigStep (prog ladSec (ladIns [1, 0, 1, 1, 0, 1, 0, 1]) ladPubBody) "1\n" := by
+  bigstep_derive
+
+theorem ladPub_halts {c : Vsa.Machine.Config}
+    (hb : Boot (prog ladSec (ladIns [1, 0, 1, 1, 0, 1, 0, 1]) ladPubBody) c) :
+    Vsa.Machine.Halts c "1\n" 0 :=
+  ((compile_correct _ (sup_transfer _ _ (lad_low [0, 0, 0, 0, 0, 0, 0, 0] _ rfl rfl) _ _ ladPub_sup)
+    (by rw [← len_transfer _ _ (lad_low [0, 0, 0, 0, 0, 0, 0, 0] [1, 0, 1, 1, 0, 1, 0, 1] rfl rfl)];
+        exact ladPub_fit) c hb.good hb.tick hb.pc hb.pw hb.out hb.code hb.lib).1 _).mp ladPub_valid
+
 end Vsa.CT.Examples
